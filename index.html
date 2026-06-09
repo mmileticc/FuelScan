@@ -38,60 +38,67 @@
     </div>
 
     <script>
-        // 1. INICIJALIZACIJA BIBLIOTEKE (Služi isključivo za čitanje statičnih slika)
-        const html5QrCode = new Html5Qrcode("reader");
-        const resultElement = document.getElementById('result');
+    const html5QrCode = new Html5Qrcode("reader");
+    const resultElement = document.getElementById('result');
+    const video = document.getElementById('camera-preview');
 
-        // 2. PALJENJE KAMERE (Koristimo native browser funkciju, bez biblioteke)
-        const video = document.getElementById('camera-preview');
+    // SIGURNOSNA PROVERA: Da li pretraživač uopšte dozvoljava kameru (traži HTTPS)
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
             .then(stream => { video.srcObject = stream; })
-            .catch(err => { resultElement.innerText = "Nema pristupa kameri. Proveri dozvole."; });
+            .catch(err => { resultElement.innerText = "Kamera je blokirana u podešavanjima."; });
+    } else {
+        // Ako nema HTTPS-a, aplikacija neće pući, nego će te samo obavestiti
+        resultElement.innerText = "⚠️ HTTP detektovan. Kamera je isključena, ali učitavanje iz fajla radi!";
+        video.style.display = "none"; // Sakrivamo crni prozor za kameru
+    }
 
-        // 3. ZAJEDNIČKA FUNKCIJA ZA ANALIZU (Radi isto i za okidanje i za fajl)
-        function processImage(file) {
-            resultElement.innerText = "Analiziram...";
-            
-            html5QrCode.scanFile(file, true)
-                .then(decodedText => {
-                    const link = document.createElement('a');
-                    link.href = decodedText;
-                    link.innerText = decodedText;
-                    link.target = "_blank";
-                    
-                    resultElement.innerHTML = "";
-                    resultElement.appendChild(link);
-                })
-                .catch(err => {
-                    resultElement.innerText = "Nije pronađen QR kod. Pokušaj ponovo.";
-                });
+    // ZAJEDNIČKA FUNKCIJA ZA ANALIZU
+    function processImage(file) {
+        resultElement.innerText = "Analiziram...";
+        
+        html5QrCode.scanFile(file, true)
+            .then(decodedText => {
+                const link = document.createElement('a');
+                link.href = decodedText;
+                link.innerText = decodedText;
+                link.target = "_blank";
+                
+                resultElement.innerHTML = "";
+                resultElement.appendChild(link);
+            })
+            .catch(err => {
+                resultElement.innerText = "Nije pronađen QR kod na toj slici. Pokušaj ponovo.";
+            });
+    }
+
+    // LOGIKA ZA DUGME "OKINI" (radiće samo ako radi i kamera)
+    document.getElementById('snap-btn').addEventListener('click', () => {
+        if (!video.srcObject) {
+            alert("Kamera nije aktivna jer niste na HTTPS vezi!");
+            return;
         }
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        canvas.toBlob(blob => {
+            const file = new File([blob], "snapshot.jpg", { type: "image/jpeg" });
+            processImage(file);
+        }, 'image/jpeg');
+    });
 
-        // 4. LOGIKA ZA DUGME "OKINI"
-        document.getElementById('snap-btn').addEventListener('click', () => {
-            // Pravimo "nevidljivo" platno na koje crtamo trenutni kadar sa videa
-            const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            // Pretvaramo taj crtež u fajl (sliku) i šaljemo u skener
-            canvas.toBlob(blob => {
-                const file = new File([blob], "snapshot.jpg", { type: "image/jpeg" });
-                processImage(file);
-            }, 'image/jpeg');
-        });
+    // LOGIKA ZA DUGME "UČITAJ" (sada radi uvek, bez obzira na HTTP/HTTPS)
+    document.getElementById('upload-btn').addEventListener('click', () => {
+        document.getElementById('file-input').click();
+    });
 
-        // 5. LOGIKA ZA DUGME "UČITAJ"
-        document.getElementById('upload-btn').addEventListener('click', () => {
-            document.getElementById('file-input').click();
-        });
-
-        document.getElementById('file-input').addEventListener('change', e => {
-            if (e.target.files.length > 0) {
-                processImage(e.target.files[0]);
-            }
-        });
-    </script>
+    document.getElementById('file-input').addEventListener('change', e => {
+        if (e.target.files.length > 0) {
+            processImage(e.target.files[0]);
+        }
+    });
+</script>
 </body>
 </html>
