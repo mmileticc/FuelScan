@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skener računa</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 20px; }
+        #reader { width: 100%; max-width: 500px; margin: 0 auto; }
+        #result-box { margin-top: 20px; padding: 15px; border: 1px solid #ccc; word-break: break-all; }
+    </style>
+</head>
+<body>
+
+    <h1>Skener računa</h1>
+    <div id="reader"></div>
+    
+    <div id="result-box">
+        <h3>Rezultat:</h3>
+        <p id="result">Čekam skeniranje...</p>
+    </div>
+
+    <script>
+        function onScanSuccess(decodedText, decodedResult) {
+            // Pronađi element gde prikazujemo rezultat
+            const resultElement = document.getElementById('result');
+            
+            // Kreiraj link element
+            const link = document.createElement('a');
+            link.href = decodedText;       // Postavi link da vodi na skeniranu adresu
+            link.innerText = decodedText;  // Tekst linka ostaje URL
+            link.target = "_blank";        // Otvara u novom tabu/prozoru
+            
+            // Očisti prethodni tekst ("Čekam skeniranje...") i dodaj link
+            resultElement.innerHTML = ""; 
+            resultElement.appendChild(link);
+            
+            // Zaustavi skener nakon uspešnog skeniranja
+            html5QrcodeScanner.clear();
+        }
+
+        let html5QrcodeScanner = new Html5QrcodeScanner(
+            "reader", { fps: 10, qrbox: 250 });
+        
+        html5QrcodeScanner.render(onScanSuccess);
+    </script>
+</body>
+</html>
