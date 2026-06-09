@@ -3,47 +3,95 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Skener računa</title>
+    <title>Stabilan Skener</title>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
         body { font-family: sans-serif; text-align: center; padding: 20px; }
-        #reader { width: 100%; max-width: 500px; margin: 0 auto; }
+        
+        /* Video okvir koji izgleda kao skener */
+        #camera-preview { width: 100%; max-width: 500px; border: 2px solid #333; background: #000; border-radius: 8px; }
+        
+        /* Sakrivamo element koji biblioteka trazi za inicijalizaciju, jer nam treba samo za fajlove */
+        #reader { width: 0; height: 0; overflow: hidden; }
+        
+        .controls { margin-top: 20px; }
+        button { padding: 15px 25px; margin: 5px; font-size: 16px; cursor: pointer; }
         #result-box { margin-top: 20px; padding: 15px; border: 1px solid #ccc; word-break: break-all; }
     </style>
 </head>
 <body>
 
-    <h1>Skener računa</h1>
-    <div id="reader"></div>
+    <h1>Skener</h1>
     
+    <video id="camera-preview" autoplay playsinline></video>
+    <div id="reader"></div>
+
+    <div class="controls">
+        <button id="snap-btn">📸 OKINI KADAR</button>
+        <button id="upload-btn">📁 UČITAJ SLIKU</button>
+        <input type="file" id="file-input" style="display:none" accept="image/*">
+    </div>
+
     <div id="result-box">
         <h3>Rezultat:</h3>
-        <p id="result">Čekam skeniranje...</p>
+        <p id="result">Kamera je spremna...</p>
     </div>
 
     <script>
-        function onScanSuccess(decodedText, decodedResult) {
-            // Pronađi element gde prikazujemo rezultat
-            const resultElement = document.getElementById('result');
+        // 1. INICIJALIZACIJA BIBLIOTEKE (Služi isključivo za čitanje statičnih slika)
+        const html5QrCode = new Html5Qrcode("reader");
+        const resultElement = document.getElementById('result');
+
+        // 2. PALJENJE KAMERE (Koristimo native browser funkciju, bez biblioteke)
+        const video = document.getElementById('camera-preview');
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+            .then(stream => { video.srcObject = stream; })
+            .catch(err => { resultElement.innerText = "Nema pristupa kameri. Proveri dozvole."; });
+
+        // 3. ZAJEDNIČKA FUNKCIJA ZA ANALIZU (Radi isto i za okidanje i za fajl)
+        function processImage(file) {
+            resultElement.innerText = "Analiziram...";
             
-            // Kreiraj link element
-            const link = document.createElement('a');
-            link.href = decodedText;       // Postavi link da vodi na skeniranu adresu
-            link.innerText = decodedText;  // Tekst linka ostaje URL
-            link.target = "_blank";        // Otvara u novom tabu/prozoru
-            
-            // Očisti prethodni tekst ("Čekam skeniranje...") i dodaj link
-            resultElement.innerHTML = ""; 
-            resultElement.appendChild(link);
-            
-            // Zaustavi skener nakon uspešnog skeniranja
-            html5QrcodeScanner.clear();
+            html5QrCode.scanFile(file, true)
+                .then(decodedText => {
+                    const link = document.createElement('a');
+                    link.href = decodedText;
+                    link.innerText = decodedText;
+                    link.target = "_blank";
+                    
+                    resultElement.innerHTML = "";
+                    resultElement.appendChild(link);
+                })
+                .catch(err => {
+                    resultElement.innerText = "Nije pronađen QR kod. Pokušaj ponovo.";
+                });
         }
 
-        let html5QrcodeScanner = new Html5QrcodeScanner(
-            "reader", { fps: 10, qrbox: 250 });
-        
-        html5QrcodeScanner.render(onScanSuccess);
+        // 4. LOGIKA ZA DUGME "OKINI"
+        document.getElementById('snap-btn').addEventListener('click', () => {
+            // Pravimo "nevidljivo" platno na koje crtamo trenutni kadar sa videa
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Pretvaramo taj crtež u fajl (sliku) i šaljemo u skener
+            canvas.toBlob(blob => {
+                const file = new File([blob], "snapshot.jpg", { type: "image/jpeg" });
+                processImage(file);
+            }, 'image/jpeg');
+        });
+
+        // 5. LOGIKA ZA DUGME "UČITAJ"
+        document.getElementById('upload-btn').addEventListener('click', () => {
+            document.getElementById('file-input').click();
+        });
+
+        document.getElementById('file-input').addEventListener('change', e => {
+            if (e.target.files.length > 0) {
+                processImage(e.target.files[0]);
+            }
+        });
     </script>
 </body>
 </html>
