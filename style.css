@@ -1,0 +1,79 @@
+/* ============================================================
+   FuelScan – style.css
+   Tailwind-first, mobile layout helpers i custom dodaci
+   ============================================================ */
+
+/* Safe-area insets za iPhone notch / Dynamic Island */
+.safe-top    { padding-top:    env(safe-area-inset-top,    0px); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+/* ── Viewport fiksiranje za PWA full-screen ── */
+html, body {
+  height: 100%;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Animacija za loading spinner ── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.animate-spin { animation: spin 1s linear infinite; }
+
+/* ── Pulse za skeleton loading ── */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+.animate-pulse { animation: pulse 2s ease-in-out infinite; }
+
+/* ── QR Reader overrides (html5-qrcode generisani elementi) ── */
+#qr-reader {
+  border: none !important;
+  background: #1e293b;
+}
+
+#qr-reader video {
+  border-radius: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+}
+
+/* Skriva interne kontrole html5-qrcode (koristimo naše) */
+#qr-reader__dashboard_section,
+#qr-reader__header_message,
+#qr-reader__status_span,
+#qr-reader__filescan_input {
+  display: none !important;
+}
+
+/* ── Scrollbar stilizovanje (webkit) ── */
+::-webkit-scrollbar        { width: 4px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  { background: #334155; border-radius: 4px; }
+
+/* ── Fokus ring za pristupačnost ── */
+:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+/* ── Screen tranzicija (fade-in pri pokazivanju) ── */
+.screen:not(.hidden) {
+  animation: fadeIn 0.18s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Active state za nav tab ── */
+.nav-tab:active {
+  transform: scale(0.93);
+  transition: transform 0.1s ease;
+}
+
+/* ── Input placeholder boja ── */
+::placeholder { color: #475569; }

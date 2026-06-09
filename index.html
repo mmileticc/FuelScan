@@ -1,104 +1,315 @@
 <!DOCTYPE html>
 <html lang="sr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stabilan Skener</title>
-    <script src="https://unpkg.com/html5-qrcode"></script>
-    <style>
-        body { font-family: sans-serif; text-align: center; padding: 20px; }
-        
-        /* Video okvir koji izgleda kao skener */
-        #camera-preview { width: 100%; max-width: 500px; border: 2px solid #333; background: #000; border-radius: 8px; }
-        
-        /* Sakrivamo element koji biblioteka trazi za inicijalizaciju, jer nam treba samo za fajlove */
-        #reader { width: 0; height: 0; overflow: hidden; }
-        
-        .controls { margin-top: 20px; }
-        button { padding: 15px 25px; margin: 5px; font-size: 16px; cursor: pointer; }
-        #result-box { margin-top: 20px; padding: 15px; border: 1px solid #ccc; word-break: break-all; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="description" content="FuelScan - skeniranje računa za gorivo i praćenje potrošnje" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="FuelScan" />
+
+  <title>FuelScan</title>
+
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="manifest.json" />
+  <!-- Favicon placeholder – zamenite svojom ikonom -->
+  <!-- <link rel="apple-touch-icon" href="icons/icon-192.png" /> -->
+
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            fuel: {
+              50:  '#f0f9ff',
+              100: '#e0f2fe',
+              400: '#38bdf8',
+              500: '#0ea5e9',
+              600: '#0284c7',
+              700: '#0369a1',
+              900: '#0c4a6e',
+            },
+            surface: {
+              DEFAULT: '#0f172a',
+              card:    '#1e293b',
+              border:  '#334155',
+            }
+          },
+          fontFamily: {
+            display: ['"DM Sans"', 'system-ui', 'sans-serif'],
+            mono:    ['"JetBrains Mono"', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <!-- html5-qrcode library -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+  <!-- App styles -->
+  <link rel="stylesheet" href="style.css" />
 </head>
-<body>
 
-    <h1>Skener</h1>
-    
-    <video id="camera-preview" autoplay playsinline></video>
-    <div id="reader"></div>
+<body class="bg-surface text-slate-100 font-display min-h-screen flex flex-col select-none">
 
-    <div class="controls">
-        <button id="snap-btn">📸 OKINI KADAR</button>
-        <button id="upload-btn">📁 UČITAJ SLIKU</button>
-        <input type="file" id="file-input" style="display:none" accept="image/*">
+  <!-- ============================================================
+       HEADER
+  ============================================================ -->
+  <header class="sticky top-0 z-40 bg-surface/80 backdrop-blur-md border-b border-surface-border px-4 py-3 flex items-center justify-between safe-top">
+    <div class="flex items-center gap-2">
+      <!-- Logo / wordmark -->
+      <span class="text-fuel-400 text-xl leading-none">⛽</span>
+      <span class="text-lg font-bold tracking-tight">Fuel<span class="text-fuel-400">Scan</span></span>
     </div>
 
-    <div id="result-box">
-        <h3>Rezultat:</h3>
-        <p id="result">Kamera je spremna...</p>
+    <!-- Auth area -->
+    <div id="auth-area" class="flex items-center gap-3">
+      <!-- Prikazuje se dok nije prijavljen -->
+      <button id="btn-login"
+        class="text-sm font-medium px-3 py-1.5 rounded-lg bg-fuel-600 hover:bg-fuel-500 transition-colors">
+        Prijavi se
+      </button>
+      <!-- Prikazuje se kad je prijavljen (inicijalno skriveno) -->
+      <div id="user-info" class="hidden items-center gap-2">
+        <img id="user-avatar" src="" alt="avatar"
+          class="w-8 h-8 rounded-full border border-fuel-500 object-cover" />
+        <button id="btn-logout"
+          class="text-xs text-slate-400 hover:text-slate-200 transition-colors">
+          Odjavi se
+        </button>
+      </div>
     </div>
+  </header>
 
-    <script>
-    const html5QrCode = new Html5Qrcode("reader");
-    const resultElement = document.getElementById('result');
-    const video = document.getElementById('camera-preview');
+  <!-- ============================================================
+       MAIN CONTENT  –  svaki ekran je zaseban <section>
+       JS menja display: none / flex/block da prebacuje između njih
+  ============================================================ -->
+  <main class="flex-1 overflow-y-auto pb-24">
 
-    // SIGURNOSNA PROVERA: Da li pretraživač uopšte dozvoljava kameru (traži HTTPS)
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-            .then(stream => { video.srcObject = stream; })
-            .catch(err => { resultElement.innerText = "Kamera je blokirana u podešavanjima."; });
-    } else {
-        // Ako nema HTTPS-a, aplikacija neće pući, nego će te samo obavestiti
-        resultElement.innerText = "⚠️ HTTP detektovan. Kamera je isključena, ali učitavanje iz fajla radi!";
-        video.style.display = "none"; // Sakrivamo crni prozor za kameru
+    <!-- ─── DASHBOARD SCREEN ─────────────────────────────────── -->
+    <section id="screen-dashboard" class="screen px-4 pt-6 space-y-6">
+
+      <!-- Pozdravna kartica -->
+      <div class="bg-gradient-to-br from-fuel-700 to-fuel-900 rounded-2xl p-5 shadow-lg">
+        <p class="text-sm text-fuel-200 mb-1">Dobrodošli nazad</p>
+        <h1 class="text-2xl font-bold" id="greeting-name">Korisnik</h1>
+        <p class="text-fuel-300 text-sm mt-1">Pratite troškove goriva na jednom mestu.</p>
+      </div>
+
+      <!-- Statistike -->
+      <div class="grid grid-cols-2 gap-3">
+        <div class="bg-surface-card border border-surface-border rounded-xl p-4">
+          <p class="text-xs text-slate-400 uppercase tracking-wider mb-1">Ukupno litara</p>
+          <p class="text-3xl font-bold font-mono" id="stat-liters">—</p>
+        </div>
+        <div class="bg-surface-card border border-surface-border rounded-xl p-4">
+          <p class="text-xs text-slate-400 uppercase tracking-wider mb-1">Ukupno potrošeno</p>
+          <p class="text-3xl font-bold font-mono" id="stat-total">—</p>
+        </div>
+        <div class="bg-surface-card border border-surface-border rounded-xl p-4">
+          <p class="text-xs text-slate-400 uppercase tracking-wider mb-1">Poslednje punjenje</p>
+          <p class="text-lg font-semibold font-mono" id="stat-last">—</p>
+        </div>
+        <div class="bg-surface-card border border-surface-border rounded-xl p-4">
+          <p class="text-xs text-slate-400 uppercase tracking-wider mb-1">Prosečna cena/L</p>
+          <p class="text-3xl font-bold font-mono" id="stat-avg-price">—</p>
+        </div>
+      </div>
+
+      <!-- Poslednje transakcije (preview) -->
+      <div>
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-3">Poslednje transakcije</h2>
+        <ul id="recent-transactions" class="space-y-2">
+          <!-- Popunjava JS -->
+          <li class="text-slate-500 text-sm text-center py-6">Nema podataka. Skenirajte prvi račun.</li>
+        </ul>
+      </div>
+
+    </section><!-- /dashboard -->
+
+
+    <!-- ─── SCAN SCREEN ───────────────────────────────────────── -->
+    <section id="screen-scan" class="screen hidden px-4 pt-6 space-y-5">
+
+      <h2 class="text-xl font-bold">Skeniraj QR kod</h2>
+
+      <!-- Upozorenje za HTTPS (prikazuje JS ako nije HTTPS) -->
+      <div id="https-warning" class="hidden bg-amber-900/40 border border-amber-600 text-amber-300 text-sm rounded-xl px-4 py-3">
+        ⚠️ Kamera zahteva <strong>HTTPS</strong>. Otvorite aplikaciju preko bezbedne veze.
+      </div>
+
+      <!-- Video element za live kameru - kao u stabilnoj verziji -->
+      <div class="bg-surface-card border border-surface-border rounded-2xl overflow-hidden">
+        <video id="camera-preview" autoplay playsinline class="w-full aspect-square object-cover bg-black"></video>
+      </div>
+
+      <!-- Skriveni element koji html5-qrcode traži -->
+      <div id="qr-reader" style="width: 0; height: 0; overflow: hidden;"></div>
+
+      <!-- Status skeniranja -->
+      <div id="scan-status" class="text-center text-sm text-slate-400 min-h-[2rem] flex items-center justify-center gap-2">
+        <span id="scan-status-text">Pripreman...</span>
+      </div>
+
+      <!-- Kontrole -->
+      <div class="flex gap-3">
+        <button id="btn-snap" class="flex-1 bg-fuel-600 hover:bg-fuel-500 text-white font-semibold py-3 rounded-xl transition-colors">
+          📸 Okini kadar
+        </button>
+        <button id="btn-upload" class="flex-1 bg-fuel-700 hover:bg-fuel-600 text-white font-semibold py-3 rounded-xl transition-colors">
+          📁 Učitaj sliku
+        </button>
+      </div>
+
+      <!-- Skriveni file input -->
+      <input id="file-input" type="file" accept="image/*" style="display: none;" />
+
+      <!-- Rezultat -->
+      <div id="result-box" class="bg-surface-card border border-surface-border rounded-xl px-4 py-3 min-h-[4rem] flex items-center justify-center text-center">
+        <p id="scan-result" class="text-sm text-slate-400">Skeniranje je spremno...</p>
+      </div>
+
+      <!-- Manuelni unos URL-a (fallback) -->
+      <div class="pt-2 border-t border-surface-border">
+        <p class="text-xs text-slate-500 mb-2">ili unesite URL ručno</p>
+        <div class="flex gap-2">
+          <input id="manual-url-input" type="url" placeholder="https://..."
+            class="flex-1 bg-surface-card border border-surface-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-fuel-500 transition-colors" />
+          <button id="btn-manual-submit"
+            class="bg-fuel-700 hover:bg-fuel-600 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors">
+            Pošalji
+          </button>
+        </div>
+      </div>
+
+    </section><!-- /scan -->
+
+
+    <!-- ─── HISTORY SCREEN ────────────────────────────────────── -->
+    <section id="screen-history" class="screen hidden px-4 pt-6 space-y-4">
+
+      <div class="flex items-center justify-between">
+        <h2 class="text-xl font-bold">Istorija punjenja</h2>
+        <!-- Filter / sort placeholder -->
+        <button class="text-sm text-fuel-400 hover:text-fuel-300 transition-colors">Filtriraj</button>
+      </div>
+
+      <!-- Lista transakcija -->
+      <ul id="history-list" class="space-y-3">
+        <!-- Popunjava JS -->
+        <li class="text-slate-500 text-sm text-center py-10">Istorija je prazna.</li>
+      </ul>
+
+    </section><!-- /history -->
+
+
+    <!-- ─── RESULT SCREEN (prikazuje se nakon uspešnog skeniranja) -->
+    <section id="screen-result" class="screen hidden px-4 pt-6 space-y-5">
+
+      <div class="flex items-center gap-3">
+        <button id="btn-back-from-result" class="text-fuel-400 hover:text-fuel-300 transition-colors text-2xl leading-none">←</button>
+        <h2 class="text-xl font-bold">Rezultat skeniranja</h2>
+      </div>
+
+      <!-- Kartica sa podacima sa računa -->
+      <div id="result-card" class="bg-surface-card border border-surface-border rounded-2xl p-5 space-y-3">
+        <!-- Popunjava JS nakon API odgovora -->
+        <p class="text-slate-500 text-sm">Učitavanje podataka...</p>
+      </div>
+
+      <!-- Akcije -->
+      <div class="flex gap-3">
+        <button id="btn-save-result"
+          class="flex-1 bg-fuel-600 hover:bg-fuel-500 font-semibold py-3 rounded-xl transition-colors">
+          Sačuvaj
+        </button>
+        <button id="btn-discard-result"
+          class="flex-1 bg-slate-700 hover:bg-slate-600 font-semibold py-3 rounded-xl transition-colors">
+          Odbaci
+        </button>
+      </div>
+
+    </section><!-- /result -->
+
+  </main><!-- /main -->
+
+
+  <!-- ============================================================
+       BOTTOM NAVIGATION
+  ============================================================ -->
+  <nav class="fixed bottom-0 left-0 right-0 z-40 bg-surface/90 backdrop-blur-md border-t border-surface-border safe-bottom">
+    <div class="flex items-center justify-around px-2 py-2">
+
+      <!-- Dashboard tab -->
+      <button data-target="dashboard"
+        class="nav-tab flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-colors text-slate-400 hover:text-fuel-400 active-tab:text-fuel-400">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round"
+            d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+        </svg>
+        <span class="text-xs font-medium">Početna</span>
+      </button>
+
+      <!-- Scan tab (istaknuto dugme u sredini) -->
+      <button data-target="scan"
+        class="nav-tab flex flex-col items-center gap-1 -mt-5 bg-fuel-600 hover:bg-fuel-500 text-white rounded-2xl px-5 py-3 shadow-lg shadow-fuel-900/50 transition-colors">
+        <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round"
+            d="M3 7V5a2 2 0 012-2h2M3 17v2a2 2 0 002 2h2m10-18h2a2 2 0 012 2v2m0 10v2a2 2 0 01-2 2h-2M9 9h.01M15 9h.01M9 15h.01M15 15h.01" />
+        </svg>
+        <span class="text-xs font-semibold">Skeniraj</span>
+      </button>
+
+      <!-- History tab -->
+      <button data-target="history"
+        class="nav-tab flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-colors text-slate-400 hover:text-fuel-400">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round"
+            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        </svg>
+        <span class="text-xs font-medium">Istorija</span>
+      </button>
+
+    </div>
+  </nav><!-- /nav -->
+
+
+  <!-- ============================================================
+       TOAST NOTIFICATION (globalni)
+  ============================================================ -->
+  <div id="toast" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 hidden max-w-xs w-full">
+    <div id="toast-inner" class="bg-slate-800 border border-slate-600 text-sm text-white px-4 py-3 rounded-xl shadow-xl text-center">
+      <!-- Tekst poruke ubacuje JS -->
+    </div>
+  </div>
+
+
+  <!-- ============================================================
+       Firebase SDK je sada u script.js (bolja praksa)
+  ============================================================ -->
+
+  <!-- App logic -->
+  <script src="script.js" type="module"></script>
+
+  <!-- Service Worker registracija -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('[SW] Registrovan:', reg.scope))
+          .catch(err => console.warn('[SW] Greška:', err));
+      });
     }
+  </script>
 
-    // ZAJEDNIČKA FUNKCIJA ZA ANALIZU
-    function processImage(file) {
-        resultElement.innerText = "Analiziram...";
-        
-        html5QrCode.scanFile(file, true)
-            .then(decodedText => {
-                const link = document.createElement('a');
-                link.href = decodedText;
-                link.innerText = decodedText;
-                link.target = "_blank";
-                
-                resultElement.innerHTML = "";
-                resultElement.appendChild(link);
-            })
-            .catch(err => {
-                resultElement.innerText = "Nije pronađen QR kod na toj slici. Pokušaj ponovo.";
-            });
-    }
-
-    // LOGIKA ZA DUGME "OKINI" (radiće samo ako radi i kamera)
-    document.getElementById('snap-btn').addEventListener('click', () => {
-        if (!video.srcObject) {
-            alert("Kamera nije aktivna jer niste na HTTPS vezi!");
-            return;
-        }
-        const canvas = document.createElement('canvas');
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        canvas.toBlob(blob => {
-            const file = new File([blob], "snapshot.jpg", { type: "image/jpeg" });
-            processImage(file);
-        }, 'image/jpeg');
-    });
-
-    // LOGIKA ZA DUGME "UČITAJ" (sada radi uvek, bez obzira na HTTP/HTTPS)
-    document.getElementById('upload-btn').addEventListener('click', () => {
-        document.getElementById('file-input').click();
-    });
-
-    document.getElementById('file-input').addEventListener('change', e => {
-        if (e.target.files.length > 0) {
-            processImage(e.target.files[0]);
-        }
-    });
-</script>
 </body>
 </html>
