@@ -1,143 +1,97 @@
 /**
  * FuelScan – script.js
  * ─────────────────────────────────────────────────────────────
- * Sve: Firebase Auth, QR skeniranje, navigacija, API.
+ * Supabase Auth, QR skeniranje, navigacija, API.
  * ─────────────────────────────────────────────────────────────
  */
 
 // ══════════════════════════════════════════════════════════════
-//  0. FIREBASE IMPORT - ODMAH NA POČETKU
+//  1. KONFIGURACIJA & INICIJALIZACIJA
 // ══════════════════════════════════════════════════════════════
+const SUPABASE_URL = "https://jybatqpvokssutompyto.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp5YmF0cXB2b2tzc3V0b21weXRvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMTUwMjIsImV4cCI6MjA5NjU5MTAyMn0.W-zZN3dLJDn18m3qoL0EP8s4g2K32vFO7tyIWD-oN_Q";
 
-import {
-  initializeApp,
-} from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
-
-import {
-  GoogleAuthProvider,
-  signInWithPopup,
-  signOut,
-  onAuthStateChanged,
-  getAuth,
-} from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
-
-const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyCQMaUNA7HI-xVgImU-zBzXy8O5mvswyEw",
-  authDomain: "fuelscan-9ea34.firebaseapp.com",
-  projectId: "fuelscan-9ea34",
-  storageBucket: "fuelscan-9ea34.firebasestorage.app",
-  messagingSenderId: "113254330984",
-  appId: "1:113254330984:web:343ad70e769022ff37c1dd",
-  measurementId: "G-Q5S5GRJZDL"
-};
-
-// Inicijalizuj ODMAH
-const firebaseApp = initializeApp(FIREBASE_CONFIG);
-const auth = getAuth(firebaseApp);
-console.log("[Firebase] ✅ Inicijalizovan direktno u script.js");
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const BACKEND_API_URL = "http://127.0.0.1:8000/parse-receipt";
 
 // ══════════════════════════════════════════════════════════════
-//  1. KONFIGURACIJA
+//  2. AUTH STATE
 // ══════════════════════════════════════════════════════════════
-
-const SUPABASE_URL    = "https://YOUR_PROJECT_REF.supabase.co";
-const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
-
-const BACKEND_API_URL = "https://YOUR_BACKEND_URL/parse-receipt";
-
-// ══════════════════════════════════════════════════════════════
-//  2. AUTH STATE INITIALIZATION
-// ══════════════════════════════════════════════════════════════
-
-let currentUser = null; // Čuvamo trenutnog korisnika globalno
+let currentUser = null;
 
 // Osluškuj promene u stanju prijave
-onAuthStateChanged(auth, (user) => {
-  if (user) {
-    handleUserSignedIn(user);
+supabase.auth.onAuthStateChange((event, session) => {
+  if (session) {
+    handleUserSignedIn(session.user);
   } else {
     handleUserSignedOut();
   }
 });
 
-console.log("[Auth] State listener registrovan");
+async function signInWithGoogle() {
+  const { error } = await supabase.auth.signInWithOAuth({ provider: 'google' });
+  if (error) showToast("Greška pri prijavi: " + error.message, "error");
+}
 
-/** Poziva se kada korisnik uspešno uđe */
+async function signOut() {
+  await supabase.auth.signOut();
+}
+
+/** UI izmene pri prijavi */
 function handleUserSignedIn(user) {
-  currentUser = user; // Čuvaj u globalnoj varijabli
-  
-  document.getElementById("btn-login").classList.add("hidden");
+  currentUser = user; 
+  document.getElementById("btn-login")?.classList.add("hidden");
   const userInfo = document.getElementById("user-info");
-  userInfo.classList.remove("hidden");
-  userInfo.classList.add("flex");
+  userInfo?.classList.remove("hidden");
+  userInfo?.classList.add("flex");
 
-  document.getElementById("user-avatar").src = user.photoURL || "";
-  document.getElementById("greeting-name").textContent = user.displayName?.split(" ")[0] || "Korisnik";
-
+  document.getElementById("user-avatar").src = user.user_metadata.avatar_url || "";
+  document.getElementById("greeting-name").textContent = user.user_metadata.full_name?.split(" ")[0] || "Korisnik";
   loadDashboardData();
 }
 
-/** Poziva se kada korisnik izađe */
+/** UI izmene pri odjavi */
 function handleUserSignedOut() {
-  currentUser = null; // Očisti globalni korisnik
-  
-  document.getElementById("btn-login").classList.remove("hidden");
+  currentUser = null;
+  document.getElementById("btn-login")?.classList.remove("hidden");
   const userInfo = document.getElementById("user-info");
-  userInfo.classList.add("hidden");
-  userInfo.classList.remove("flex");
+  userInfo?.classList.add("hidden");
+  userInfo?.classList.remove("flex");
 
   document.getElementById("greeting-name").textContent = "Korisnik";
   clearDashboard();
 }
 
-// Auth dugmad
-document.getElementById("btn-login").addEventListener("click", async () => {
-  try {
-    const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
-  } catch (err) {
-    console.error("[Auth] Greška pri prijavi:", err);
-    let message = "Prijava nije uspela.";
-    
-    if (err.code === "auth/unauthorized-domain") {
-      message = `❌ Domena nije autorizovana.\nDodajte u Firebase: ${window.location.hostname}`;
-    }
-    
-    showToast(message, "error");
-  }
-});
-
-document.getElementById("btn-logout").addEventListener("click", async () => {
-  await signOut(auth);
-  showToast("Odjavljen/a");
-});
+// Event listeneri za dugmad (očišćeni od Firebase-a)
+document.getElementById("btn-login")?.addEventListener("click", signInWithGoogle);
+document.getElementById("btn-logout")?.addEventListener("click", signOut);
 
 
 // ══════════════════════════════════════════════════════════════
-//  3. SUPABASE INICIJALIZACIJA
+//  3. QR SKENER & OSTALO (tvoja logika)
 // ══════════════════════════════════════════════════════════════
+// [Ovde ostaje tvoj postojeći kod za QR skener, navigaciju, renderovanje...]
+// SAMO PAZI na funkciju saveReceiptToSupabase:
 
-/**
- * Koristimo Supabase JS SDK direktno (bez npm-a).
- * Dodajte u index.html pre script.js ako koristite CDN varijantu:
- * <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
- *
- * Ako koristite module bundler, importujte:
- * import { createClient } from '@supabase/supabase-js'
- */
+async function saveReceiptToSupabase(receipt) {
+  // PROMENA: Supabase koristi .id, a ne .uid
+  const userId = currentUser?.id; 
+  if (!userId) throw new Error("Korisnik nije prijavljen.");
 
-// ⚠️  Ako učitavate Supabase preko CDN-a, dekommentujte sledeće:
-// const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const { error } = await supabase.from("fuel_receipts").insert([{
+    user_id:     userId,
+    station:     receipt.station,
+    fuel_type:   receipt.fuel_type,
+    liters:      receipt.liters,
+    price_per_l: receipt.price_per_l,
+    total:       receipt.total,
+    date:        receipt.date,
+    raw_url:     receipt.raw_url,
+  }]);
 
-// Ako koristite ES module import:
-// import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm'
-// const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  if (error) throw new Error(error.message);
+}
 
-/** Placeholder – zamijenite pravom inicijalizacijom */
-const supabase = {
-  _warn() { console.warn("[Supabase] Nije inicijalizovan. Unesite ključeve i importujte SDK."); },
-  from() { this._warn(); return { select: () => Promise.resolve({ data: [], error: null }) }; },
-};
 
 
 // ══════════════════════════════════════════════════════════════
@@ -326,14 +280,17 @@ async function handleScan(decodedText) {
   renderResultCard(null, "loading");
 
   try {
-    // Pribavljanje Firebase ID tokena za autentifikaciju prema backendu
-    const idToken = await currentUser.getIdToken();
+    // Pronađi ovaj deo u handleScan funkciji
+    const { data: { session } } = await supabase.auth.getSession();
+    console.log("Sesija:", session); // Ako je ovo null, zato dobijaš 401!
+    // Dodaj ovaj log da vidiš šta zapravo šalješ u konzoli
+    console.log("Šaljem token:", session?.access_token);
 
     const response = await fetch(BACKEND_API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${idToken}`,
+        "Authorization": `Bearer ${session?.access_token}`, // OVO MORA BITI VALIDNO
       },
       body: JSON.stringify({ url: decodedText }),
     });
@@ -453,47 +410,6 @@ document.getElementById("btn-discard-result").addEventListener("click", () => {
 });
 
 
-// ══════════════════════════════════════════════════════════════
-//  8. SUPABASE – čuvanje i učitavanje
-// ══════════════════════════════════════════════════════════════
-
-/**
- * Čuva podatke o računu u Supabase tabelu 'fuel_receipts'.
- *
- * ⚠️  Kreirajte tabelu u Supabase-u sa sledećom strukturom:
- *   CREATE TABLE fuel_receipts (
- *     id          uuid DEFAULT gen_random_uuid() PRIMARY KEY,
- *     user_id     text NOT NULL,
- *     station     text,
- *     fuel_type   text,
- *     liters      numeric,
- *     price_per_l numeric,
- *     total       numeric,
- *     date        timestamptz,
- *     raw_url     text,
- *     created_at  timestamptz DEFAULT now()
- *   );
- *   ALTER TABLE fuel_receipts ENABLE ROW LEVEL SECURITY;
- *
- * @param {object} receipt - podaci za čuvanje
- */
-async function saveReceiptToSupabase(receipt) {
-  const userId = currentUser?.uid;
-  if (!userId) throw new Error("Korisnik nije prijavljen.");
-
-  const { error } = await supabase.from("fuel_receipts").insert([{
-    user_id:     userId,
-    station:     receipt.station,
-    fuel_type:   receipt.fuel_type,
-    liters:      receipt.liters,
-    price_per_l: receipt.price_per_l,
-    total:       receipt.total,
-    date:        receipt.date,
-    raw_url:     receipt.raw_url,
-  }]);
-
-  if (error) throw new Error(error.message);
-}
 
 /**
  * Učitava sve račune za prijavljenog korisnika.
@@ -501,20 +417,14 @@ async function saveReceiptToSupabase(receipt) {
  * @returns {Promise<Array>} lista računa
  */
 async function fetchUserReceipts() {
-  const userId = currentUser?.uid;
-  if (!userId) return [];
-
+  // Nema potrebe za getIdToken(), Supabase ovo radi automatski
   const { data, error } = await supabase
     .from("fuel_receipts")
     .select("*")
-    .eq("user_id", userId)
-    .order("date", { ascending: false });
+    .order("date", { ascending: false }); // RLS će filtrirati redove automatski!
 
-  if (error) {
-    console.error("[Supabase] Greška pri učitavanju:", error);
-    return [];
-  }
-  return data || [];
+  if (error) { console.error(error); return []; }
+  return data;
 }
 
 

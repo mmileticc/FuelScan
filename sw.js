@@ -14,6 +14,9 @@ self.addEventListener('install', (e) => {
 
 // Fetching (hvatanje zahteva)
 self.addEventListener('fetch', (e) => {
+  if (e.request.url.includes('127.0.0.1:8000')) {
+    return; 
+  }
   e.respondWith(
     caches.match(e.request).then((response) => response || fetch(e.request))
   );
