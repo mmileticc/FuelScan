@@ -45,10 +45,11 @@ supabase.auth.onAuthStateChange((_event, session) => {
 });
 
 export async function signInWithGoogle() {
+  const redirectUrl = window.location.origin + window.location.pathname;
   const { error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: window.location.origin,
+      redirectTo: redirectUrl,
     },
   });
   if (error) throw error;
