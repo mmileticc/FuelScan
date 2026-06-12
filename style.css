@@ -1,79 +1,145 @@
 /* ============================================================
-   FuelScan – style.css
-   Tailwind-first, mobile layout helpers i custom dodaci
+   FuelScan – Korigovan i Ultra-Stabilan Stil
+   Savršen UI na telefonu + Elegantan "Phone Mockup" na desktopu
    ============================================================ */
 
-/* Safe-area insets za iPhone notch / Dynamic Island */
-.safe-top    { padding-top:    env(safe-area-inset-top,    0px); }
-.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
-
-/* ── Viewport fiksiranje za PWA full-screen ── */
-html, body {
+/* ── Centriranje cele aplikacije na Desktopu pomoću HTML Flex-a ── */
+html {
+  background: #090d16;
   height: 100%;
+  overflow: hidden;
+}
+
+@media (min-width: 768px) {
+  html {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    /* Bogata gradijent pozadina oko telefona na desktopu */
+    background: radial-gradient(circle at 50% 30%, #1e293b 0%, #05070c 100%);
+  }
+
+  body {
+    width: 420px !important;   /* Širina modernog pametnog telefona */
+    height: 850px !important;  /* Visina ekrana telefona */
+    max-height: 92vh;
+    border-radius: 32px;       /* Zaobljene ivice ekrana */
+    box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8),
+                0 0 0 12px #1e293b, /* Simulacija kućišta telefona */
+                0 0 0 13px rgba(255, 255, 255, 0.05);
+    overflow: hidden;
+    
+    /* Ključni CSS trik: transform primorava "fixed" elemente da ostanu unutar body-ja */
+    transform: translate(0, 0); 
+    position: relative;
+  }
+}
+
+/* ── Osnovni elementi aplikacije ── */
+body {
+  background-color: #0f172a !important; /* Osigurava stabilnu tamnu pozadinu */
   overscroll-behavior: none;
   -webkit-tap-highlight-color: transparent;
 }
 
-/* ── Animacija za loading spinner ── */
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-.animate-spin { animation: spin 1s linear infinite; }
+/* Podrška za notch/izreze na novijim telefonima */
+.safe-top    { padding-top: env(safe-area-inset-top, 0px); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
 
-/* ── Pulse za skeleton loading ── */
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.5; }
-}
-.animate-pulse { animation: pulse 2s ease-in-out infinite; }
-
-/* ── QR Reader overrides (html5-qrcode generisani elementi) ── */
-#qr-reader {
-  border: none !important;
-  background: #1e293b;
+/* Prostor na dnu ekrana kako navigacija ne bi prekrila kartice */
+main {
+  padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
 }
 
-#qr-reader video {
-  border-radius: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: cover;
+/* ── Stilizovanje Donjeg Menija (Floating Glassmorphism) ── */
+nav {
+  background: rgba(15, 23, 42, 0.8) !important;
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
 
-/* Skriva interne kontrole html5-qrcode (koristimo naše) */
-#qr-reader__dashboard_section,
-#qr-reader__header_message,
-#qr-reader__status_span,
-#qr-reader__filescan_input {
-  display: none !important;
+/* Srednje "Skeniraj" dugme koje iskače */
+nav button[data-target="scan"] {
+  background: linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%) !important;
+  box-sizing: border-box;
+  box-shadow: 0 8px 20px rgba(14, 165, 233, 0.4) !important;
+  border: 4px solid #0f172a !important; /* Spaja se sa pozadinom */
 }
 
-/* ── Scrollbar stilizovanje (webkit) ── */
-::-webkit-scrollbar        { width: 4px; }
-::-webkit-scrollbar-track  { background: transparent; }
-::-webkit-scrollbar-thumb  { background: #334155; border-radius: 4px; }
-
-/* ── Fokus ring za pristupačnost ── */
-:focus-visible {
-  outline: 2px solid #38bdf8;
-  outline-offset: 2px;
+nav button[data-target="scan"]:active {
+  transform: scale(0.92) translateY(-16px) !important;
 }
 
-/* ── Screen tranzicija (fade-in pri pokazivanju) ── */
+.nav-tab {
+  transition: all 0.2s ease;
+}
+.nav-tab:active:not([data-target="scan"]) {
+  transform: scale(0.9);
+}
+
+/* ── Uglađene animacije i Glassmorphism za kartice ── */
 .screen:not(.hidden) {
-  animation: fadeIn 0.18s ease-out;
+  animation: AppScreenReveal 0.24s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
+@keyframes AppScreenReveal {
+  from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ── Active state za nav tab ── */
-.nav-tab:active {
-  transform: scale(0.93);
-  transition: transform 0.1s ease;
+/* Stilizovanje info kartica */
+.bg-surface-card, #result-card {
+  background: rgba(30, 41, 59, 0.4) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
 }
 
-/* ── Input placeholder boja ── */
+/* Stilizovanje pojedinačnih transakcija u listi */
+#recent-transactions li, #history-list li {
+  background: rgba(30, 41, 59, 0.4) !important;
+  border: 1px solid rgba(51, 65, 85, 0.3) !important;
+  border-radius: 14px !important;
+  padding: 14px !important;
+  backdrop-filter: blur(4px);
+}
+
+/* ── Skener i Kamera (Laserski efekat) ── */
+#screen-scan .bg-surface-card {
+  position: relative;
+  border: 2px solid rgba(56, 189, 248, 0.3) !important;
+}
+
+/* Svetleća linija koja simulira laserski skener preko kamere */
+#screen-scan .bg-surface-card::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #38bdf8, transparent);
+  box-shadow: 0 0 14px #38bdf8;
+  animation: scanLaserEffect 2.3s ease-in-out infinite;
+  z-index: 10;
+  pointer-events: none;
+}
+
+@keyframes scanLaserEffect {
+  0% { top: 0%; }
+  50% { top: 100%; }
+  100% { top: 0%; }
+}
+
+/* Čišćenje default ružnih stilova eksterne html5-qrcode biblioteke */
+#qr-reader { border: none !important; background: #000 !important; }
+#qr-reader video { object-fit: cover !important; }
+#qr-reader__dashboard_section, #qr-reader__header_message, 
+#qr-reader__status_span, #qr-reader__filescan_input { display: none !important; }
+
+/* Skrolovanje i ostale sitnice */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+:focus-visible { outline: 2px solid #38bdf8; outline-offset: 2px; }
 ::placeholder { color: #475569; }
