@@ -49,6 +49,10 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="https://unpkg.com/html5-qrcode"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 </head>
 <body class="bg-surface text-slate-100 font-display h-[100dvh] w-full flex flex-col select-none overflow-hidden">
   <header class="sticky top-0 z-40 bg-surface/80 backdrop-blur-md border-b border-surface-border px-4 py-3 flex items-center justify-between safe-top">
@@ -101,33 +105,33 @@
     </section>
 
     <section id="screen-scan" class="screen hidden px-4 pt-6 space-y-5">
-  <h2 class="text-xl font-bold">Skeniraj QR kod</h2>
+      <h2 class="text-xl font-bold">Skeniraj QR kod</h2>
 
-  <div class="bg-surface-card border border-surface-border rounded-2xl overflow-hidden">
-    <video id="camera-preview" autoplay playsinline class="w-full aspect-square object-cover bg-black"></video>
-  </div>
+      <div class="bg-surface-card border border-surface-border rounded-2xl overflow-hidden">
+        <video id="camera-preview" autoplay playsinline class="w-full aspect-square object-cover bg-black"></video>
+      </div>
 
-  <div class="flex gap-3">
-    <button id="btn-start-camera" class="flex-1 bg-fuel-600 hover:bg-fuel-500 text-white font-semibold py-3 rounded-xl transition-colors">
-      Pokreni kameru
-    </button>
-    <button id="btn-stop-camera" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 rounded-xl transition-colors">
-      Ugasi kameru
-    </button>
-  </div>
+      <div class="flex gap-3">
+        <button id="btn-start-camera" class="flex-1 bg-fuel-600 hover:bg-fuel-500 text-white font-semibold py-3 rounded-xl transition-colors">
+          Pokreni kameru
+        </button>
+        <button id="btn-stop-camera" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 rounded-xl transition-colors">
+          Ugasi kameru
+        </button>
+      </div>
 
-  <div id="scan-status" class="text-center text-sm text-slate-400 min-h-8 flex items-center justify-center">
-    <span id="scan-status-text">Kamera je ugašena</span>
-  </div>
+      <div id="scan-status" class="text-center text-sm text-slate-400 min-h-8 flex items-center justify-center">
+        <span id="scan-status-text">Kamera je ugašena</span>
+      </div>
 
-  <div class="flex gap-3">
-    <button id="btn-snap" class="flex-1 bg-fuel-600 hover:bg-fuel-500 text-white font-semibold py-3 rounded-xl transition-colors">Okini kadar</button>
-    <button id="btn-upload" class="flex-1 bg-fuel-700 hover:bg-fuel-600 text-white font-semibold py-3 rounded-xl transition-colors">Učitaj sliku</button>
-  </div>
+      <div class="flex gap-3">
+        <button id="btn-snap" class="flex-1 bg-fuel-600 hover:bg-fuel-500 text-white font-semibold py-3 rounded-xl transition-colors">Okini kadar</button>
+        <button id="btn-upload" class="flex-1 bg-fuel-700 hover:bg-fuel-600 text-white font-semibold py-3 rounded-xl transition-colors">Učitaj sliku</button>
+      </div>
 
-  <input id="file-input" type="file" accept="image/*" hidden />
-  <div id="qr-reader" style="width: 0; height: 0; overflow: hidden;"></div>
-</section>
+      <input id="file-input" type="file" accept="image/*" hidden />
+      <div id="qr-reader" style="width: 0; height: 0; overflow: hidden;"></div>
+    </section>
 
     <section id="screen-history" class="screen hidden px-4 pt-6 space-y-4">
       <div class="flex items-center justify-between">
@@ -136,6 +140,55 @@
       <ul id="history-list" class="space-y-3">
         <li class="text-slate-500 text-sm text-center py-10">Istorija je prazna.</li>
       </ul>
+    </section>
+    
+    <section id="screen-statistics" class="screen hidden px-4 pt-6 space-y-6">
+      <div class="flex items-center justify-between">
+        <h2 class="text-xl font-bold">Analitika potrošnje</h2>
+      </div>
+
+      <div class="flex bg-surface-card p-1 rounded-xl border border-surface-border">
+        <button data-period="all" class="btn-period flex-1 text-xs font-medium py-2 rounded-lg bg-fuel-600 text-white transition-all">Sve</button>
+        <button data-period="year" class="btn-period flex-1 text-xs font-medium py-2 rounded-lg text-slate-400 hover:text-slate-200 transition-all">Godina</button>
+        <button data-period="month" class="btn-period flex-1 text-xs font-medium py-2 rounded-lg text-slate-400 hover:text-slate-200 transition-all">Mesec</button>
+      </div>
+
+      <!-- <div class="grid grid-cols-2 gap-3">
+        <div class="bg-gradient-to-br from-slate-800 to-slate-900 border border-surface-border rounded-xl p-4">
+          <p class="text-[10px] text-slate-400 uppercase tracking-wider font-medium mb-1">Potrošeno u periodu</p>
+          <p class="text-xl font-black font-mono text-white" id="stats-period-total">0 RSD</p>
+        </div>
+        
+        <div class="bg-gradient-to-br from-slate-800 to-slate-900 border border-surface-border rounded-xl p-4">
+          <p class="text-[10px] text-slate-400 uppercase tracking-wider font-medium mb-1">Sipano u periodu</p>
+          <p class="text-xl font-black font-mono text-white" id="stats-period-liters">0 L</p>
+        </div>
+      </div> -->
+
+      <div class="grid grid-cols-2 gap-3">
+        <div class="bg-surface-card border border-surface-border rounded-xl p-4 flex flex-col justify-between min-h-[100px]">
+          <div>
+            <p class="text-[10px] text-emerald-400 uppercase tracking-wider font-semibold mb-1">Najjeftinije gorivo</p>
+            <p class="text-base font-bold truncate" id="stats-cheapest-station">Učitavanje...</p>
+          </div>
+          <p class="text-sm font-semibold font-mono text-slate-300 mt-2" id="stats-cheapest-price">—</p>
+        </div>
+        
+        <div class="bg-surface-card border border-surface-border rounded-xl p-4 flex flex-col justify-between min-h-[100px]">
+          <div>
+            <p class="text-[10px] text-red-400 uppercase tracking-wider font-semibold mb-1">Najskuplje gorivo</p>
+            <p class="text-base font-bold truncate" id="stats-expensive-station">Učitavanje...</p>
+          </div>
+          <p class="text-sm font-semibold font-mono text-slate-300 mt-2" id="stats-expensive-price">—</p>
+        </div>
+      </div>
+
+      <div class="bg-surface-card border border-surface-border rounded-2xl p-4 space-y-3">
+        <p class="text-xs text-slate-400 uppercase tracking-wider font-medium">Trend cena kroz vreme (RSD/L)</p>
+        <div class="relative w-full h-56">
+          <canvas id="chart-consumption"></canvas>
+        </div>
+      </div>
     </section>
 
     <section id="screen-result" class="screen hidden px-4 pt-6 space-y-5">
@@ -157,13 +210,23 @@
 
   <nav class="fixed bottom-0 left-0 right-0 z-40 bg-surface/90 backdrop-blur-md border-t border-surface-border safe-bottom">
     <div class="flex items-center justify-around px-2 py-2">
-      <button data-target="dashboard" class="nav-tab flex flex-col items-center gap-1 px-4 py-2 rounded-xl text-slate-400 hover:text-fuel-400">
+      <button data-target="dashboard" class="nav-tab flex flex-col items-center gap-1 px-3 py-2 rounded-xl text-slate-400 hover:text-fuel-400">
         <span class="text-xs font-medium">Početna</span>
       </button>
+
+      <!-- <button data-target="placeholder" class="nav-tab flex flex-col items-center gap-1 px-3 py-2 rounded-xl text-slate-400 hover:text-fuel-400">
+        <span class="text-xs font-medium">Placeholder</span>
+      </button> -->
+      
       <button data-target="scan" class="nav-tab flex flex-col items-center gap-1 -mt-5 bg-fuel-600 hover:bg-fuel-500 text-white rounded-2xl px-5 py-3 shadow-lg">
         <span class="text-xs font-semibold">Skeniraj</span>
       </button>
-      <button data-target="history" class="nav-tab flex flex-col items-center gap-1 px-4 py-2 rounded-xl text-slate-400 hover:text-fuel-400">
+
+      <button data-target="statistics" class="nav-tab flex flex-col items-center gap-1 px-3 py-2 rounded-xl text-slate-400 hover:text-fuel-400">
+        <span class="text-xs font-medium">Statistika</span>
+      </button>
+
+      <button data-target="history" class="nav-tab flex flex-col items-center gap-1 px-3 py-2 rounded-xl text-slate-400 hover:text-fuel-400">
         <span class="text-xs font-medium">Istorija</span>
       </button>
     </div>
