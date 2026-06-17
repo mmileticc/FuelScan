@@ -9,7 +9,7 @@ import {
   clearDashboard,
 } from "./ui.js";
 import { fetchUserReceipts, saveReceiptToSupabase } from "./api.js";
-import { startCamera, stopCamera, bindScannerUI, handleScan } from "./scanner.js";
+import { startCamera, stopCamera, bindScannerUI, handleScan, resetScannerState } from "./scanner.js";
 
 async function loadDashboardData() {
   try {
@@ -69,7 +69,8 @@ function bindNavigation() {
     }
   });
 
-  document.getElementById("btn-back-from-result")?.addEventListener("click", () => {
+  document.getElementById("btn-back-from-result")?.addEventListener("click", async () => {
+    await resetScannerState(); // <--- DODATO
     showScreen("scan");
   });
 
@@ -83,21 +84,22 @@ function bindNavigation() {
     try {
       await saveReceiptToSupabase(receipt);
       window.__pendingReceipt = null;
+      await resetScannerState(); // <--- DODATO: Čistimo sve za sledeći sken
       showToast("Račun je sačuvan!", "success");
       showScreen("dashboard");
       await loadDashboardData();
     } catch (err) {
-      showToast(err.message || "Greška pri čuvanju.", "error");
+      showToast(err.message || "Greška pri čuvanju.\", \"error");
     }
   });
 
-  document.getElementById("btn-discard-result")?.addEventListener("click", () => {
+  document.getElementById("btn-discard-result")?.addEventListener("click", async () => {
     window.__pendingReceipt = null;
+    await resetScannerState(); // <--- DODATO
     showScreen("scan");
     showToast("Račun odbačen.", "info");
   });
 }
-
 window.addEventListener("DOMContentLoaded", async () => {
   bindNavigation();
   bindScannerUI();

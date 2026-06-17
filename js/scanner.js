@@ -52,20 +52,48 @@ export function stopCamera() {
   setScanStatus("Kamera je ugašena", "idle");
 }
 
-async function processImage(file) {
-  setScanStatus("Analiziram sliku...", "loading");
+// async function processImage(file) {
+//   setScanStatus("Analiziram sliku...", "loading");
 
+//   try {
+//     const scanner = getFileQrScanner();
+//     const decodedText = await scanner.scanFile(file, true);
+//     setScanStatus("QR kod detektovan!", "success");
+//     await handleScan(decodedText);
+//   } catch (err) {
+//     console.error("[Image Scan]", err);
+//     setScanStatus("QR kod nije pronađen. Pokušaj ponovo.", "error");
+//     showToast("QR kod nije pronađen u slici", "error");
+//   }
+// }
+// ... unutar scanner.js ...
+
+async function processImage(file) {
   try {
-    const scanner = getFileQrScanner();
-    const decodedText = await scanner.scanFile(file, true);
-    setScanStatus("QR kod detektovan!", "success");
-    await handleScan(decodedText);
+    setScanStatus("Obrađujem sliku...", "loading");
+    renderResultCard(null, "loading");
+    showScreen("result");
+
+    // Zaustavljamo kameru odmah jer prelazimo na ekran sa rezultatom
+    await stopCamera();
+
+    const qrCode = await scanQrFromBlob(file);
+    setScanStatus("QR kod uspešno prepoznat! Učitavam podatke...", "success");
+
+    const receiptData = await parseReceipt(qrCode);
+    renderResultCard(receiptData, "success");
+    window.__pendingReceipt = receiptData;
   } catch (err) {
-    console.error("[Image Scan]", err);
-    setScanStatus("QR kod nije pronađen. Pokušaj ponovo.", "error");
-    showToast("QR kod nije pronađen u slici", "error");
+    renderResultCard(null, "error", err.message);
+    setScanStatus("Greška pri obradi.", "error");
+    showToast("Greška pri obradi.", "error");
+  } finally {
+    // --- KLJUČNO: Čistimo input polje kako bi sledeći klik na "Učitaj sliku" ponovo radio ---
+    const fileInput = document.getElementById("file-input");
+    if (fileInput) fileInput.value = ""; 
   }
 }
+
 
 export async function handleScan(decodedText) {
   if (!isAuthReady()) {
@@ -128,4 +156,41 @@ export function bindScannerUI() {
     if (!url) return showToast("Unesite URL.", "error");
     handleScan(url);
   });
+}
+
+// --- DODAJ OVU FUNKCIJU NA SAMO DNO FAJLA scanner.js ---
+export async function resetScannerState() {
+  // 1. Gasimo kameru i oslobađamo stream
+  await stopCamera();
+  
+  // 2. Ako je html5Qrcode skener ostao aktivan u pozadini, gasimo ga
+  if (fileQrScanner) {
+    try {
+      if (fileQrScanner.isScanning) {
+        await fileQrScanner.stop();
+      }
+    } catch (e) {
+      console.warn("Skener je već bio ugašen:", e);
+    }
+  }
+  
+  // 3. Vraćamo status tekst na početni
+  setScanStatus("Spreman za skeniranje", "idle");
+  
+  // 4. Čistimo input za fajlove za svaki slučaj
+  const fileInput = document.getElementById("file-input");
+  if (fileInput) fileInput.value = "";
+}
+
+// Pomoćna funkcija koja uzima fajl/blob, pokreće html5Qrcode i čita QR kod sa slike
+export async function scanQrFromBlob(file) {
+  const scanner = getFileQrScanner();
+  try {
+    // html5Qrcode ima ugrađenu metodu scanFile koja radi direktno sa Blob/File objektima
+    const decodedText = await scanner.scanFile(file, true);
+    return decodedText;
+  } catch (err) {
+    console.error("[QR Scanner Error]:", err);
+    throw new Error("Nije pronađen validan QR kod na slici. Pokušajte ponovo sa boljim osvetljenjem.");
+  }
 }
