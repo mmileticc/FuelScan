@@ -65,16 +65,20 @@ export function renderResultCard(data, state, errorMsg = "") {
   }
 
   const date = data?.date ? new Date(data.date).toLocaleDateString("sr-RS") : "—";
+  
+  // Formatiramo lokacijski string (npr: "Šumadijske Divizije 24, Beograd (Voždovac)")
+  const locationText = [data?.address, data?.city].filter(Boolean).join(", ") || "Nepoznata lokacija";
 
   card.innerHTML = `
     <div class="flex items-start justify-between">
-      <div>
-        <p class="font-semibold text-base">${data?.station ?? "Nepoznata stanica"}</p>
-        <p class="text-sm text-slate-400">${date}</p>
+      <div class="flex-1 pr-2">
+        <p class="font-semibold text-base leading-tight">${data?.station ?? "Nepoznata stanica"}</p>
+        <p class="text-xs text-slate-400 mt-0.5">${locationText}</p>
+        <p class="text-xs text-slate-500 mt-1">${date}</p>
       </div>
-      <span class="bg-fuel-900 text-fuel-300 text-xs font-medium px-2 py-1 rounded-lg">${data?.fuel_type ?? "—"}</span>
+      <span class="bg-fuel-900 text-fuel-300 text-xs font-medium px-2 py-1 rounded-lg shrink-0">${data?.fuel_type ?? "—"}</span>
     </div>
-    <div class="border-t border-surface-border pt-3 grid grid-cols-3 gap-3 text-center">
+    <div class="border-t border-surface-border pt-3 grid grid-cols-3 gap-3 text-center mt-3">
       <div>
         <p class="text-xs text-slate-400 mb-1">Litara</p>
         <p class="text-xl font-bold font-mono">${data?.liters ?? "—"}</p>
@@ -88,6 +92,40 @@ export function renderResultCard(data, state, errorMsg = "") {
         <p class="text-xl font-bold font-mono text-fuel-400">${data?.total ? data.total.toFixed(2) : "—"}</p>
       </div>
     </div>`;
+}
+
+export function renderHistoryList(receipts) {
+  const list = document.getElementById("history-list");
+  if (!list) return;
+
+  if (!receipts.length) {
+    list.innerHTML = '<li class="text-slate-500 text-sm text-center py-10">Istorija je prazna.</li>';
+    return;
+  }
+
+  list.innerHTML = receipts.map((r) => {
+    // Formatiramo punu lokaciju za svaku stavku u istoriji
+    const locationText = [r.address, r.city].filter(Boolean).join(", ") || "Nepoznata lokacija";
+    
+    return `
+    <li class="bg-surface-card border border-surface-border rounded-xl px-4 py-4 space-y-2">
+      <div class="flex items-start justify-between">
+        <div>
+          <p class="font-semibold leading-tight">${r.station ?? "Nepoznata stanica"}</p>
+          <p class="text-[11px] text-slate-400 mt-0.5">${locationText}</p>
+        </div>
+        <span class="text-xs text-fuel-300 bg-fuel-900 px-2 py-0.5 rounded-lg shrink-0">${r.fuel_type ?? "—"}</span>
+      </div>
+      <div class="flex items-center justify-between text-sm pt-1">
+        <span class="text-slate-400 text-xs">${r.date ? new Date(r.date).toLocaleDateString("sr-RS") : "—"}</span>
+        <span class="font-mono text-fuel-400 font-semibold">${r.total ? r.total.toFixed(0) + " RSD" : "—"}</span>
+      </div>
+      <div class="grid grid-cols-2 gap-2 pt-1.5 border-t border-surface-border text-xs text-slate-400">
+        <span>Litara: <strong class="text-slate-200">${r.liters ? r.liters.toFixed(2) + " L" : "—"}</strong></span>
+        <span>Cena/L: <strong class="text-slate-200">${r.price_per_l ? r.price_per_l.toFixed(2) + " RSD" : "—"}</strong></span>
+      </div>
+    </li>`;
+  }).join("");
 }
 
 export function handleSignedInUI(user) {
@@ -148,28 +186,3 @@ export function renderRecentTransactions(receipts) {
     </li>`).join("");
 }
 
-export function renderHistoryList(receipts) {
-  const list = document.getElementById("history-list");
-  if (!list) return;
-
-  if (!receipts.length) {
-    list.innerHTML = '<li class="text-slate-500 text-sm text-center py-10">Istorija je prazna.</li>';
-    return;
-  }
-
-  list.innerHTML = receipts.map((r) => `
-    <li class="bg-surface-card border border-surface-border rounded-xl px-4 py-4 space-y-2">
-      <div class="flex items-center justify-between">
-        <p class="font-semibold">${r.station ?? "Nepoznata stanica"}</p>
-        <span class="text-xs text-fuel-300 bg-fuel-900 px-2 py-0.5 rounded-lg">${r.fuel_type ?? "—"}</span>
-      </div>
-      <div class="flex items-center justify-between text-sm">
-        <span class="text-slate-400">${r.date ? new Date(r.date).toLocaleDateString("sr-RS") : "—"}</span>
-        <span class="font-mono text-fuel-400 font-semibold">${r.total ? r.total.toFixed(0) + " RSD" : "—"}</span>
-      </div>
-      <div class="grid grid-cols-2 gap-2 pt-1 border-t border-surface-border text-xs text-slate-400">
-        <span>Litara: <strong class="text-slate-200">${r.liters ? r.liters.toFixed(2) + " L" : "—"}</strong></span>
-        <span>Cena/L: <strong class="text-slate-200">${r.price_per_l ? r.price_per_l.toFixed(2) + " RSD" : "—"}</strong></span>
-      </div>
-    </li>`).join("");
-}

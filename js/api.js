@@ -35,6 +35,9 @@ export async function saveReceiptToSupabase(receipt) {
     total: receipt.total ?? null,
     date: receipt.date ?? null,
     raw_url: receipt.raw_url ?? null,
+    address: receipt.address ?? null,
+    city: receipt.city ?? null,
+    municipality: receipt.municipality ?? null,
   };
 
   const { error } = await supabase.from("fuel_receipts").insert([row]);
