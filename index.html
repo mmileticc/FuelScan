@@ -7,6 +7,23 @@
   <meta name="description" content="FuelScan - skeniranje računa za gorivo i praćenje potrošnje" />
   <title>FuelScan</title>
 
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/icon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="assets/icon-16x16.png" />
+  <link rel="apple-touch-icon" href="assets/icon-192x192.png" />
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('service-worker.js', { scope: '/' })
+          .then(reg => console.log('Service Worker registrovan na opsegu:', reg.scope))
+          .catch(err => console.error('Greška pri registraciji SW:', err));
+      });
+    }
+  </script>
+
+
+
   <link rel="stylesheet" href="style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

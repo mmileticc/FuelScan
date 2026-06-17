@@ -1,9 +1,25 @@
 {
-  "name": "FuelScan",
+  "id": "fuelscan-app",
+  "name": "FuelScan - Fuel expense Tracker",
   "short_name": "FuelScan",
-  "start_url": "/index.html",
+  "description": "Scan fuel receipts and track your expenses automatically.",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0f172a",
-  "theme_color": "#0f172a"
-  
+  "theme_color": "#0284c7",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "assets/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable any"
+    }
+  ]
 }
