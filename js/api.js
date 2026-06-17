@@ -53,3 +53,13 @@ export async function fetchUserReceipts() {
   if (error) throw error;
   return data || [];
 }
+
+export async function deleteReceipt(id) {
+  const { error } = await supabase
+    .from("fuel_receipts")
+    .delete()
+    .eq("id", id);
+
+  if (error) throw error;
+  return true;
+}

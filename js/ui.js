@@ -108,7 +108,7 @@ export function renderHistoryList(receipts) {
     const locationText = [r.address, r.city].filter(Boolean).join(", ") || "Nepoznata lokacija";
     
     return `
-    <li class="bg-surface-card border border-surface-border rounded-xl px-4 py-4 space-y-2">
+    <li class="history-item bg-surface-card border border-surface-border rounded-xl px-4 py-4 space-y-2 cursor-pointer" data-id="${r.id}">
       <div class="flex items-start justify-between">
         <div>
           <p class="font-semibold leading-tight">${r.station ?? "Nepoznata stanica"}</p>
@@ -126,6 +126,127 @@ export function renderHistoryList(receipts) {
       </div>
     </li>`;
   }).join("");
+}
+
+export function setupDeleteHandler(onDeleteCallback) {
+  const items = document.querySelectorAll('.history-item');
+
+  items.forEach(item => {
+    let timer;
+    let isPressing = false;
+    let menuOpened = false;
+
+    // KLJUČNO ZA DESKTOP: Isključujemo selekciju teksta na elementu
+    item.style.webkitUserSelect = 'none';
+    item.style.userSelect = 'none';
+    item.style.touchAction = 'none'; 
+
+    const startTimer = (e) => {
+      // Reaguj samo na levi klik miša ili dodir prsta
+      if (e.pointerType === 'mouse' && e.button !== 0) return; 
+      
+      isPressing = true;
+      menuOpened = false;
+
+      timer = setTimeout(() => {
+        if (isPressing) {
+          menuOpened = true;
+          if (navigator.vibrate) navigator.vibrate(50);
+          
+          showDeleteMenu(e.clientX, e.clientY, () => {
+            onDeleteCallback(item.dataset.id);
+          });
+          isPressing = false;
+        }
+      }, 600); // 600ms dugi pritisak
+    };
+
+    const cancelTimer = () => {
+      isPressing = false;
+      clearTimeout(timer);
+    };
+
+    item.addEventListener('pointerdown', startTimer);
+    item.addEventListener('pointerup', cancelTimer);
+    item.addEventListener('pointerleave', cancelTimer);
+    item.addEventListener('pointercancel', cancelTimer);
+
+    // KLJUČNO ZA DESKTOP: Sprečava browser da pokrene "drag ghost" (prevlačenje) koji ubija tajmer
+    item.addEventListener('dragstart', (e) => e.preventDefault());
+
+    // Sprečavamo lažni klik ako se meni otvorio
+    item.addEventListener('click', (e) => {
+      if (menuOpened) {
+        e.preventDefault();
+        e.stopPropagation();
+        menuOpened = false;
+      }
+    });
+
+    item.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+    });
+  });
+
+  // Modalski cancel dugme
+  const btnCancel = document.getElementById('btn-cancel-delete');
+  if (btnCancel) {
+    btnCancel.onclick = () => {
+      document.getElementById('delete-modal').classList.add('hidden');
+    };
+  }
+}
+
+export function showDeleteMenu(x, y, onConfirm) {
+  // Ukloni stari ako već postoji
+  document.getElementById("floating-delete-menu")?.remove();
+
+  const menu = document.createElement('div');
+  menu.id = "floating-delete-menu";
+  
+  // Menjamo u absolute jer se pozicioniramo UNUTAR makete telefona (body)
+  menu.className = "absolute z-[100] bg-red-600 text-white px-5 py-2.5 rounded-xl shadow-2xl cursor-pointer font-bold text-sm flex items-center gap-2";
+  
+  // Računamo poziciju klika relativno u odnosu na ivice ekrana telefona (body)
+  const bodyRect = document.body.getBoundingClientRect();
+  const localX = x - bodyRect.left;
+  const localY = y - bodyRect.top;
+
+  // Pazimo da meni ne pobegne van desne ili donje ivice ekrana telefona (širina je 420px)
+  const safeX = Math.min(localX, bodyRect.width - 140);
+  const safeY = Math.min(localY, bodyRect.height - 60);
+  
+  menu.style.left = `${safeX}px`;
+  menu.style.top = `${safeY}px`;
+  menu.innerHTML = `Obriši`;
+
+  menu.onclick = (e) => {
+    e.stopPropagation(); 
+    document.getElementById('delete-modal').classList.remove('hidden');
+    
+    document.getElementById('btn-confirm-delete').onclick = () => {
+      onConfirm();
+      document.getElementById('delete-modal').classList.add('hidden');
+      menu.remove();
+    };
+    menu.remove();
+  };
+
+  document.body.appendChild(menu);
+  
+  const closeMenu = (e) => {
+    if (!menu.contains(e.target)) {
+      menu.remove();
+      document.removeEventListener('click', closeMenu);
+      document.removeEventListener('pointerdown', closeMenu);
+    }
+  };
+  
+  // Mali delay da browser završi sa trenutnim klikom pre nego što počnemo da slušamo zatvaranje
+  setTimeout(() => {
+    document.addEventListener('click', closeMenu);
+    document.addEventListener('pointerdown', closeMenu);
+  }, 50);
 }
 
 export function handleSignedInUI(user) {

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#0f172a" />
-  <meta name="description" content="FuelScan - skeniranje računa za gorivo i praćenje potrošnje" />
+  <meta name="description" content="FuelScan - Scan fuel receipts and track your expenses automatically." />
   <title>FuelScan</title>
 
   <link rel="manifest" href="manifest.json" />
@@ -171,6 +171,17 @@
 
   <div id="toast" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 hidden max-w-xs w-full px-4">
     <div id="toast-inner" class="bg-slate-800 border border-slate-600 text-sm text-white px-4 py-3 rounded-xl shadow-xl text-center"></div>
+  </div>
+
+  <div id="delete-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+    <div class="bg-surface-card border border-surface-border p-6 rounded-2xl w-full max-w-xs shadow-2xl">
+      <h3 class="text-lg font-bold text-white mb-2">Brisanje zapisa?</h3>
+      <p class="text-slate-400 text-sm mb-6">Ova akcija je nepovratna. Da li ste sigurni?</p>
+      <div class="flex gap-3">
+        <button id="btn-cancel-delete" class="flex-1 py-2 rounded-xl bg-slate-700 text-white font-medium hover:bg-slate-600">Odustani</button>
+        <button id="btn-confirm-delete" class="flex-1 py-2 rounded-xl bg-red-600 text-white font-medium hover:bg-red-500">Obriši</button>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="./js/main.js"></script>

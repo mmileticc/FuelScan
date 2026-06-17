@@ -6,9 +6,10 @@ import {
   handleSignedOutUI,
   renderRecentTransactions,
   renderHistoryList,
+  setupDeleteHandler,
   clearDashboard,
 } from "./ui.js";
-import { fetchUserReceipts, saveReceiptToSupabase } from "./api.js";
+import { fetchUserReceipts, saveReceiptToSupabase, deleteReceipt } from "./api.js";
 import { startCamera, stopCamera, bindScannerUI, handleScan, resetScannerState } from "./scanner.js";
 
 async function loadDashboardData() {
@@ -33,6 +34,17 @@ async function loadDashboardData() {
 
     renderRecentTransactions(receipts.slice(0, 3));
     renderHistoryList(receipts);
+
+    // OVO JE NOVI DEO:
+    setupDeleteHandler(async (id) => {
+        try {
+            await deleteReceipt(id);
+            showToast("Zapis obrisan.", "success");
+            loadDashboardData(); // Osveži listu
+        } catch (err) {
+            showToast("Greška pri brisanju: " + err.message, "error");
+        }
+    });
   } catch (err) {
     showToast(err.message || "Greška pri učitavanju podataka.", "error");
   }
