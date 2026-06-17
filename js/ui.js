@@ -358,6 +358,7 @@ export function renderStatistics(receipts, period = "all") {
     return true; // "all" opcija propušta sve
   });
 
+
   // 2. Pronalaženje najjeftinijeg i najskupljeg sipanja
   const validForStats = filteredReceipts.filter((r) => Number(r.price_per_l) > 0 && r.station);
   
@@ -365,6 +366,18 @@ export function renderStatistics(receipts, period = "all") {
   const cheapestPriceEl = document.getElementById("stats-cheapest-price");
   const expensiveEl = document.getElementById("stats-expensive-station");
   const expensivePriceEl = document.getElementById("stats-expensive-price");
+
+  // === NOVI DEO: Računanje ukupnog troška i litara za izabrani period ===
+  const periodTotal = filteredReceipts.reduce((sum, r) => sum + (Number(r.total) || 0), 0);
+  const periodLiters = filteredReceipts.reduce((sum, r) => sum + (Number(r.liters) || 0), 0);
+
+  const periodTotalEl = document.getElementById("stats-period-total");
+  const periodLitersEl = document.getElementById("stats-period-liters");
+  
+  if (periodTotalEl) periodTotalEl.textContent = `${periodTotal.toFixed(0)} RSD`;
+  if (periodLitersEl) periodLitersEl.textContent = `${periodLiters.toFixed(1)} L`;
+  // ====================================================================
+
 
   if (validForStats.length > 0) {
     // Pronađi račun sa minimalnom cenom po litru
