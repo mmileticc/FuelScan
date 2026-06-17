@@ -135,11 +135,18 @@ export function setupDeleteHandler(onDeleteCallback) {
     let timer;
     let isPressing = false;
     let menuOpened = false;
+    
+    // Pamtimo početne koordinate dodira/klika
+    let startX = 0;
+    let startY = 0;
+    const MOVE_THRESHOLD = 10; // Ako se prst pomeri više od 10px, smatramo to skrolovanjem
 
-    // KLJUČNO ZA DESKTOP: Isključujemo selekciju teksta na elementu
+    // Podešavanja za stabilnost na desktopu i mobilnom
     item.style.webkitUserSelect = 'none';
     item.style.userSelect = 'none';
-    item.style.touchAction = 'none'; 
+    
+    // KLJUČNA ISPRAVKA: 'pan-y' dozvoljava normalno skrolovanje liste na gore i dole!
+    item.style.touchAction = 'pan-y'; 
 
     const startTimer = (e) => {
       // Reaguj samo na levi klik miša ili dodir prsta
@@ -147,6 +154,10 @@ export function setupDeleteHandler(onDeleteCallback) {
       
       isPressing = true;
       menuOpened = false;
+      
+      // Beležimo gde je tačno korisnik spustio prst/miš
+      startX = e.clientX;
+      startY = e.clientY;
 
       timer = setTimeout(() => {
         if (isPressing) {
@@ -158,7 +169,7 @@ export function setupDeleteHandler(onDeleteCallback) {
           });
           isPressing = false;
         }
-      }, 600); // 600ms dugi pritisak
+      }, 600); // 600ms držiš da se otvori
     };
 
     const cancelTimer = () => {
@@ -166,12 +177,30 @@ export function setupDeleteHandler(onDeleteCallback) {
       clearTimeout(timer);
     };
 
+    // Nova funkcija koja prati pomeranje prsta/miša
+    const handlePointerMove = (e) => {
+      if (!isPressing) return;
+      
+      // Računamo koliko se kursor/prst udaljio od početne tačke
+      const diffX = Math.abs(e.clientX - startX);
+      const diffY = Math.abs(e.clientY - startY);
+      
+      // Ako se pomerio više od 10px na bilo koju stranu, znači da korisnik SKROLUJE listu
+      // U tom slučaju odmah gasimo tajmer za brisanje i puštamo skrol da radi normalno
+      if (diffX > MOVE_THRESHOLD || diffY > MOVE_THRESHOLD) {
+        cancelTimer();
+      }
+    };
+
     item.addEventListener('pointerdown', startTimer);
     item.addEventListener('pointerup', cancelTimer);
     item.addEventListener('pointerleave', cancelTimer);
     item.addEventListener('pointercancel', cancelTimer);
+    
+    // Slušamo pomeranje prsta da bismo detektovali skrolovanje
+    item.addEventListener('pointermove', handlePointerMove); 
 
-    // KLJUČNO ZA DESKTOP: Sprečava browser da pokrene "drag ghost" (prevlačenje) koji ubija tajmer
+    // Sprečava desktop drag-ghosting
     item.addEventListener('dragstart', (e) => e.preventDefault());
 
     // Sprečavamo lažni klik ako se meni otvorio
@@ -188,7 +217,6 @@ export function setupDeleteHandler(onDeleteCallback) {
     });
   });
 
-  // Modalski cancel dugme
   const btnCancel = document.getElementById('btn-cancel-delete');
   if (btnCancel) {
     btnCancel.onclick = () => {
