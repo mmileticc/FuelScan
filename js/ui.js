@@ -64,7 +64,11 @@ export function renderResultCard(data, state, errorMsg = "") {
     return;
   }
 
-  const date = data?.date ? new Date(data.date).toLocaleDateString("sr-RS") : "—";
+  // ISPRAVKA OVDE: Prvo normalizujemo sirovi string datuma, pa ga prosleđujemo u New Date()
+  const normalizedDateStr = parseLocalReceiptDate(data?.date);
+  const parsedDate = new Date(normalizedDateStr);
+  const date = !isNaN(parsedDate) ? parsedDate.toLocaleDateString("sr-RS") : "—";
+  // const date = data?.date ? new Date(data.date).toLocaleDateString("sr-RS") : "—";
   
   // Formatiramo lokacijski string (npr: "Šumadijske Divizije 24, Beograd (Voždovac)")
   const locationText = [data?.address, data?.city].filter(Boolean).join(", ") || "Nepoznata lokacija";
@@ -335,3 +339,27 @@ export function renderRecentTransactions(receipts) {
     </li>`).join("");
 }
 
+
+// POMOĆNA FUNKCIJA (Ista kao u api.js, osigurava ispravan prikaz u preview-u)
+function parseLocalReceiptDate(dateStr) {
+  if (!dateStr || typeof dateStr !== 'string') return dateStr;
+  if (dateStr.includes('-')) return dateStr;
+
+  try {
+    const cleanStr = dateStr.trim();
+    const parts = cleanStr.split(/\s+/);
+    const datePart = parts[0];
+    const timePart = parts[1] || "00:00:00";
+
+    const dateComponents = datePart.split('.').filter(Boolean);
+    if (dateComponents.length < 3) return dateStr;
+
+    const day = dateComponents[0].padStart(2, '0');
+    const month = dateComponents[1].padStart(2, '0');
+    const year = dateComponents[2];
+
+    return `${year}-${month}-${day}T${timePart}`;
+  } catch (e) {
+    return dateStr;
+  }
+}
