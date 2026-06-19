@@ -38,14 +38,27 @@ export function renderStatistics(receipts, period = "all") {
     const cheapest = validForStats.reduce((min, r) => Number(r.price_per_l) < Number(min.price_per_l) ? r : min, validForStats[0]);
     const expensive = validForStats.reduce((max, r) => Number(r.price_per_l) > Number(max.price_per_l) ? r : max, validForStats[0]);
 
-    if (cheapestEl) cheapestEl.textContent = cheapest.station;
+    if (cheapestEl) {
+      cheapestEl.textContent = cheapest.station;
+      cheapestEl.title = cheapest.station; // DODATO: Prikazuje ceo naziv na hover
+    }
     if (cheapestPriceEl) cheapestPriceEl.textContent = `${Number(cheapest.price_per_l).toFixed(2)} RSD/L`;
-    if (expensiveEl) expensiveEl.textContent = expensive.station;
+    
+    if (expensiveEl) {
+      expensiveEl.textContent = expensive.station;
+      expensiveEl.title = expensive.station; // DODATO: Prikazuje ceo naziv na hover
+    }
     if (expensivePriceEl) expensivePriceEl.textContent = `${Number(expensive.price_per_l).toFixed(2)} RSD/L`;
   } else {
-    if (cheapestEl) cheapestEl.textContent = "Nema podataka";
+    if (cheapestEl) {
+      cheapestEl.textContent = "Nema podataka";
+      cheapestEl.removeAttribute("title");
+    }
     if (cheapestPriceEl) cheapestPriceEl.textContent = "—";
-    if (expensiveEl) expensiveEl.textContent = "Nema podataka";
+    if (expensiveEl) {
+      expensiveEl.textContent = "Nema podataka";
+      expensiveEl.removeAttribute("title");
+    }
     if (expensivePriceEl) expensivePriceEl.textContent = "—";
   }
 
