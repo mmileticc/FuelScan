@@ -1,5 +1,5 @@
 import { supabase, isAuthReady, getCurrentUser } from "./auth.js";
-import { setScanStatus, renderResultCard, showToast, showScreen } from "./ui.js";
+import { setScanStatus, renderResultCard, showToast, showScreen } from "./ui/_index.js";
 import { parseReceipt } from "./api.js";
 
 const video = document.getElementById("camera-preview");
@@ -52,21 +52,6 @@ export function stopCamera() {
   setScanStatus("Kamera je ugašena", "idle");
 }
 
-// async function processImage(file) {
-//   setScanStatus("Analiziram sliku...", "loading");
-
-//   try {
-//     const scanner = getFileQrScanner();
-//     const decodedText = await scanner.scanFile(file, true);
-//     setScanStatus("QR kod detektovan!", "success");
-//     await handleScan(decodedText);
-//   } catch (err) {
-//     console.error("[Image Scan]", err);
-//     setScanStatus("QR kod nije pronađen. Pokušaj ponovo.", "error");
-//     showToast("QR kod nije pronađen u slici", "error");
-//   }
-// }
-// ... unutar scanner.js ...
 
 async function processImage(file) {
   try {
@@ -158,7 +143,7 @@ export function bindScannerUI() {
   });
 }
 
-// --- DODAJ OVU FUNKCIJU NA SAMO DNO FAJLA scanner.js ---
+
 export async function resetScannerState() {
   // 1. Gasimo kameru i oslobađamo stream
   await stopCamera();
@@ -182,7 +167,6 @@ export async function resetScannerState() {
   if (fileInput) fileInput.value = "";
 }
 
-// Pomoćna funkcija koja uzima fajl/blob, pokreće html5Qrcode i čita QR kod sa slike
 export async function scanQrFromBlob(file) {
   const scanner = getFileQrScanner();
   try {

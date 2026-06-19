@@ -9,7 +9,7 @@ import {
   setupDeleteHandler,
   clearDashboard,
   renderStatistics
-} from "./ui.js";
+} from "./ui/_index.js";
 import { fetchUserReceipts, saveReceiptToSupabase, deleteReceipt } from "./api.js";
 import { startCamera, stopCamera, bindScannerUI, handleScan, resetScannerState } from "./scanner.js";
 
