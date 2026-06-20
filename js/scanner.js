@@ -1,5 +1,5 @@
 import { supabase, isAuthReady, getCurrentUser } from "./auth.js";
-import { setScanStatus, renderResultCard, showToast, showScreen } from "./ui/_index.js";
+import { setScanStatus, renderResultCard, showToast, showScreen } from "./ui/index.js";
 import { parseReceipt } from "./api.js";
 
 const video = document.getElementById("camera-preview");
