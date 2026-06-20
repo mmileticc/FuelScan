@@ -1,15 +1,33 @@
 const CACHE_NAME = 'fuelscan-v1';
+const CACHE_NAME = 'fuelscan-v2'; // Podigni verziju da poništiš stari keš
+
 const ASSETS_TO_CACHE = [
-  '/',
-  '/index.html',
-  '/style.css',
-  '/manifest.json',
-  '/js/main.js',
-  '/js/auth.js',
-  '/js/api.js',
-  '/js/ui.js',
-  '/js/scanner.js',
-  '/js/config.js'
+  '/FuelScan/',
+  '/FuelScan/index.html',
+  '/FuelScan/style.css',
+  '/FuelScan/manifest.json',
+  
+  // Glavne JS skripte na korenskom nivou js foldera
+  '/FuelScan/js/main.js',
+  '/FuelScan/js/auth.js',
+  '/FuelScan/js/api.js',
+  '/FuelScan/js/scanner.js',
+  '/FuelScan/js/config.js',
+  
+  // Novi refaktorisani fajlovi unutar js foldera
+  '/FuelScan/js/common.js',
+  '/FuelScan/js/dashboard.js',
+  '/FuelScan/js/history.js',
+  '/FuelScan/js/scan.js',
+  '/FuelScan/js/statistics.js',
+  '/FuelScan/js/dateUtil.js', // pošto ga scan.js importuje iz roditeljskog foldera
+  
+  // Slike i ikonice (dodaj i ostale ako ih koristiš)
+  '/FuelScan/assets/gallery-icon.svg',
+  '/FuelScan/assets/icon-32x32.png',
+  '/FuelScan/assets/icon-16x16.png',
+  '/FuelScan/assets/icon-192x192.png',
+  '/FuelScan/assets/icon-512x512.png'
 ];
 
 
