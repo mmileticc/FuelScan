@@ -210,7 +210,7 @@ export async function resetScannerState() {
   if(previewContainer) previewContainer.classList.add("hidden");
   if(imgElement) imgElement.src = "";
   if(video) video.style.display = "block";
-  
+  updateToggleUI(false); 
 }
 
 export async function scanQrFromBlob(file) {
