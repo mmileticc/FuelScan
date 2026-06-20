@@ -53,10 +53,12 @@ export function stopCamera() {
     cameraStream = null;
   }
 
+  updateToggleUI(false); // UI: Kamera je ugašena!
+  
   if (video) video.srcObject = null;
   setScanStatus("Kamera je ugašena", "idle");
   
-  updateToggleUI(false); // UI: Kamera je ugašena!
+  
 }
 
 // Funkcija za prikaz uslikane ili uploadovane slike
