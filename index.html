@@ -106,10 +106,23 @@
     </section>
 
    <section id="screen-scan" class="hidden flex flex-col h-full ">
-      
+
       <div id="qr-reader" class="hidden"></div>
 
       <div class="relative flex-1 overflow-hidden bg-slate-900">
+        <button id="btn-toggle-power" class="absolute top-4 right-4 z-50 bg-black/40 backdrop-blur-md p-3 rounded-full border border-white/20 hover:bg-black/60 transition flex items-center justify-center">
+        
+          <svg id="icon-cam-on" xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2-2H8L6 7H5a2 2 0 00-2 2z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+
+          <svg id="icon-cam-off" xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-red-400 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18M15 11a3 3 0 00-4.24-4.24m-2.12 2.12a3 3 0 004.24 4.24M5 7v10a2 2 0 002 2h10m4-4V9a2 2 0 00-2-2h-3l-2-2H8" />
+          </svg>
+
+        </button>
+
         <video id="camera-preview" class="w-full h-full object-cover" autoplay playsinline></video>
         <div id="image-preview-container" class="hidden w-full h-full">
           <img id="image-preview" class="w-full h-full object-contain" />

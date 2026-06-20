@@ -22,6 +22,7 @@ export async function startCamera() {
     if (!navigator.mediaDevices?.getUserMedia) {
       setScanStatus("Kamera nije dostupna. Koristi učitavanje slike.", "warning");
       if (video) video.style.display = "none";
+      updateToggleUI(false); // UI: Kamera ne radi
       return;
     }
 
@@ -34,11 +35,15 @@ export async function startCamera() {
     video.srcObject = stream;
     video.style.display = "block";
     setScanStatus("Kamera je spremna - usmerite ka QR kodu", "success");
+    
+    updateToggleUI(true); // UI: Kamera je upaljena!
+
   } catch (err) {
     console.error("[Camera]", err);
     setScanStatus("Kamera je blokirana. Učitavanje iz fajla radi.", "warning");
     if (video) video.style.display = "none";
     showToast("Pristup kameri odbijen. Koristi učitavanje iz fajla.", "error");
+    updateToggleUI(false); // UI: Kamera ne radi
   }
 }
 
@@ -50,6 +55,8 @@ export function stopCamera() {
 
   if (video) video.srcObject = null;
   setScanStatus("Kamera je ugašena", "idle");
+  
+  updateToggleUI(false); // UI: Kamera je ugašena!
 }
 
 // Funkcija za prikaz uslikane ili uploadovane slike
@@ -166,6 +173,16 @@ export function bindScannerUI() {
       setTimeout(() => startCamera(), 300);
     }
   });
+
+  // 3. Toggle dugme za paljenje i gasenje
+  document.getElementById("btn-toggle-power")?.addEventListener("click", () => {
+    // Proveravamo stanje: ako stream postoji, gasi ga. Ako ne postoji, pali ga.
+    if (cameraStream) {
+      stopCamera();
+    } else {
+      startCamera();
+    }
+  });
 }
 
 export async function resetScannerState() {
@@ -193,6 +210,7 @@ export async function resetScannerState() {
   if(previewContainer) previewContainer.classList.add("hidden");
   if(imgElement) imgElement.src = "";
   if(video) video.style.display = "block";
+  updateToggleUI(true); // UI: Kamera je upaljena!
 }
 
 export async function scanQrFromBlob(file) {
@@ -203,5 +221,20 @@ export async function scanQrFromBlob(file) {
   } catch (err) {
     console.error("[QR Scanner Error]:", err);
     throw new Error("Nije pronađen QR kod. Pokušajte ponovo sa boljim osvetljenjem.");
+  }
+}
+
+// Pomoćna funkcija koja menja izgled toggle dugmeta
+function updateToggleUI(isOn) {
+  const iconOn = document.getElementById("icon-cam-on");
+  const iconOff = document.getElementById("icon-cam-off");
+  if (!iconOn || !iconOff) return;
+
+  if (isOn) {
+    iconOn.classList.remove("hidden");
+    iconOff.classList.add("hidden");
+  } else {
+    iconOn.classList.add("hidden");
+    iconOff.classList.remove("hidden");
   }
 }
