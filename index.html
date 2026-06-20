@@ -71,6 +71,7 @@
   </header>
 
   <main class="flex-1 overflow-y-auto pb-24">
+
     <section id="screen-dashboard" class="screen px-4 pt-6 space-y-6">
       <div class="bg-gradient-to-br from-fuel-700 to-fuel-900 rounded-2xl p-5 shadow-lg">
         <p class="text-sm text-fuel-200 mb-1">Dobrodošli nazad</p>
@@ -104,33 +105,26 @@
       </div>
     </section>
 
-    <section id="screen-scan" class="screen hidden px-4 pt-6 space-y-5">
-      <h2 class="text-xl font-bold">Skeniraj QR kod</h2>
+   <section id="screen-scan" class="hidden flex flex-col h-full ">
+      
+      <div id="qr-reader" class="hidden"></div>
 
-      <div class="bg-surface-card border border-surface-border rounded-2xl overflow-hidden">
-        <video id="camera-preview" autoplay playsinline class="w-full aspect-square object-cover bg-black"></video>
+      <div class="relative flex-1 overflow-hidden bg-slate-900">
+        <video id="camera-preview" class="w-full h-full object-cover" autoplay playsinline></video>
+        <div id="image-preview-container" class="hidden w-full h-full">
+          <img id="image-preview" class="w-full h-full object-contain" />
+        </div>
       </div>
 
-      <div class="flex gap-3">
-        <button id="btn-start-camera" class="flex-1 bg-fuel-600 hover:bg-fuel-500 text-white font-semibold py-3 rounded-xl transition-colors">
-          Pokreni kameru
-        </button>
-        <button id="btn-stop-camera" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 rounded-xl transition-colors">
-          Ugasi kameru
-        </button>
+      <div class="h-24 flex items-center justify-center relative px-8">
+        
+        <button id="btn-capture" class="w-16 h-16 bg-white rounded-full border-4 border-slate-600 hover:scale-105 transition-transform"></button>
+        
+        <label class="absolute right-8 cursor-pointer p-3 rounded-full hover:bg-slate-800 transition">
+          <img src="assets/gallery-icon.svg" class="w-8 h-8" />
+          <input type="file" id="file-input" accept="image/*" class="hidden" />
+        </label>
       </div>
-
-      <div id="scan-status" class="text-center text-sm text-slate-400 min-h-8 flex items-center justify-center">
-        <span id="scan-status-text">Kamera je ugašena</span>
-      </div>
-
-      <div class="flex gap-3">
-        <button id="btn-snap" class="flex-1 bg-fuel-600 hover:bg-fuel-500 text-white font-semibold py-3 rounded-xl transition-colors">Okini kadar</button>
-        <button id="btn-upload" class="flex-1 bg-fuel-700 hover:bg-fuel-600 text-white font-semibold py-3 rounded-xl transition-colors">Učitaj sliku</button>
-      </div>
-
-      <input id="file-input" type="file" accept="image/*" hidden />
-      <div id="qr-reader" style="width: 0; height: 0; overflow: hidden;"></div>
     </section>
 
     <section id="screen-history" class="screen hidden px-4 pt-6 space-y-4">
@@ -222,9 +216,9 @@
         <span class="text-xs font-semibold">Skeniraj</span>
       </button>
 
-      <button data-target="statistics" class="nav-tab flex flex-col items-center gap-1 px-3 py-2 rounded-xl text-slate-400 hover:text-fuel-400">
+      <!-- <button data-target="statistics" class="nav-tab flex flex-col items-center gap-1 px-3 py-2 rounded-xl text-slate-400 hover:text-fuel-400">
         <span class="text-xs font-medium">Statistika</span>
-      </button>
+      </button> -->
 
       <button data-target="history" class="nav-tab flex flex-col items-center gap-1 px-3 py-2 rounded-xl text-slate-400 hover:text-fuel-400">
         <span class="text-xs font-medium">Istorija</span>

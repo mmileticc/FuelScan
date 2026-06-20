@@ -52,33 +52,49 @@ export function stopCamera() {
   setScanStatus("Kamera je ugašena", "idle");
 }
 
+// Funkcija za prikaz uslikane ili uploadovane slike
+export function showImagePreview(file) {
+  const reader = new FileReader();
+  const previewContainer = document.getElementById("image-preview-container");
+  const imgElement = document.getElementById("image-preview");
+
+  reader.onload = (e) => {
+    if(imgElement) imgElement.src = e.target.result;
+    if(video) video.style.display = "none";
+    if(previewContainer) previewContainer.classList.remove("hidden");
+  };
+  reader.readAsDataURL(file);
+}
 
 async function processImage(file) {
   try {
-    setScanStatus("Obrađujem sliku...", "loading");
-    renderResultCard(null, "loading");
-    showScreen("result");
-
-    // Zaustavljamo kameru odmah jer prelazimo na ekran sa rezultatom
-    await stopCamera();
+    // Ne prebacujemo još uvek ekran - ostavljamo korisnika da vidi "preview" slike!
+    setScanStatus("Tražim QR kod na slici...", "loading");
 
     const qrCode = await scanQrFromBlob(file);
-    setScanStatus("QR kod uspešno prepoznat! Učitavam podatke...", "success");
+    
+    // Kad pronađe QR kod, tek onda prebacujemo na rezultat
+    showScreen("result");
+    renderResultCard(null, "loading");
+    
+    // Gasimo kameru jer smo prešli na sledeći ekran
+    await stopCamera();
 
     const receiptData = await parseReceipt(qrCode);
     renderResultCard(receiptData, "success");
     window.__pendingReceipt = receiptData;
   } catch (err) {
+    // Ako ne uspe da obradi sliku ili nađe QR
+    showScreen("result");
     renderResultCard(null, "error", err.message);
     setScanStatus("Greška pri obradi.", "error");
-    showToast("Greška pri obradi.", "error");
+    showToast(err.message || "Greška pri obradi.", "error");
+    await stopCamera();
   } finally {
-    // --- KLJUČNO: Čistimo input polje kako bi sledeći klik na "Učitaj sliku" ponovo radio ---
     const fileInput = document.getElementById("file-input");
     if (fileInput) fileInput.value = ""; 
   }
 }
-
 
 export async function handleScan(decodedText) {
   if (!isAuthReady()) {
@@ -107,14 +123,19 @@ export async function handleScan(decodedText) {
 }
 
 export function bindScannerUI() {
-  document.getElementById("btn-start-camera")?.addEventListener("click", startCamera);
-  document.getElementById("btn-stop-camera")?.addEventListener("click", stopCamera);
-
-  document.getElementById("btn-snap")?.addEventListener("click", () => {
+  // 1. Slikanje kamerom (novo dugme)
+  document.getElementById("btn-capture")?.addEventListener("click", () => {
     if (!cameraStream || !video?.videoWidth) {
       showToast("Kamera nije aktivna!", "error");
       return;
     }
+
+    // Dodavanje "Blic" efekta na ekran
+    const flash = document.createElement("div");
+    flash.className = "absolute inset-0 bg-white z-50 opacity-100 transition-opacity duration-300";
+    document.getElementById("screen-scan").appendChild(flash);
+    setTimeout(() => flash.classList.add("opacity-0"), 50);
+    setTimeout(() => flash.remove(), 350);
 
     const canvas = document.createElement("canvas");
     canvas.width = video.videoWidth;
@@ -124,31 +145,32 @@ export function bindScannerUI() {
     canvas.toBlob((blob) => {
       if (!blob) return;
       const file = new File([blob], "snapshot.jpg", { type: "image/jpeg" });
-      processImage(file);
+      showImagePreview(file); // Odmah prikazujemo sliku preko kamere
+      processImage(file);     // Puštamo skeniranje
     }, "image/jpeg");
   });
 
-  document.getElementById("btn-upload")?.addEventListener("click", () => {
-    document.getElementById("file-input")?.click();
-  });
-
+  // 2. Upload iz galerije (mala ikonica levo)
   document.getElementById("file-input")?.addEventListener("change", (e) => {
-    if (e.target.files?.length) processImage(e.target.files[0]);
+    if (e.target.files?.length) {
+      const file = e.target.files[0];
+      showImagePreview(file); // Odmah prikazujemo šta je izabrao
+      processImage(file);     // Puštamo skeniranje
+    }
   });
 
-  document.getElementById("btn-manual-submit")?.addEventListener("click", () => {
-    const url = document.getElementById("manual-url-input")?.value.trim();
-    if (!url) return showToast("Unesite URL.", "error");
-    handleScan(url);
+  // 3. Dugme za refreš/toggle kamere (mala ikonica desno)
+  document.getElementById("btn-toggle-camera")?.addEventListener("click", async () => {
+    if (cameraStream) {
+      stopCamera();
+      setTimeout(() => startCamera(), 300);
+    }
   });
 }
 
-
 export async function resetScannerState() {
-  // 1. Gasimo kameru i oslobađamo stream
   await stopCamera();
   
-  // 2. Ako je html5Qrcode skener ostao aktivan u pozadini, gasimo ga
   if (fileQrScanner) {
     try {
       if (fileQrScanner.isScanning) {
@@ -159,22 +181,27 @@ export async function resetScannerState() {
     }
   }
   
-  // 3. Vraćamo status tekst na početni
   setScanStatus("Spreman za skeniranje", "idle");
   
-  // 4. Čistimo input za fajlove za svaki slučaj
   const fileInput = document.getElementById("file-input");
   if (fileInput) fileInput.value = "";
+
+  // Resetujemo UI da vrati kameru umesto uslikane slike
+  const previewContainer = document.getElementById("image-preview-container");
+  const imgElement = document.getElementById("image-preview");
+  
+  if(previewContainer) previewContainer.classList.add("hidden");
+  if(imgElement) imgElement.src = "";
+  if(video) video.style.display = "block";
 }
 
 export async function scanQrFromBlob(file) {
   const scanner = getFileQrScanner();
   try {
-    // html5Qrcode ima ugrađenu metodu scanFile koja radi direktno sa Blob/File objektima
     const decodedText = await scanner.scanFile(file, true);
     return decodedText;
   } catch (err) {
     console.error("[QR Scanner Error]:", err);
-    throw new Error("Nije pronađen validan QR kod na slici. Pokušajte ponovo sa boljim osvetljenjem.");
+    throw new Error("Nije pronađen QR kod. Pokušajte ponovo sa boljim osvetljenjem.");
   }
 }

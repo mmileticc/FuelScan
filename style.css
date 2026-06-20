@@ -153,3 +153,15 @@ nav button[data-target="scan"]:active {
   text-overflow: ellipsis; /* Dodaje magične tri tačke (...) na kraj skraćenog teksta */
   cursor: help;            /* Menja kursor u znak pitanja/pomoć na desktopu da nagovesti hover */
 }
+
+/* Styling za kontrolni panel */
+#camera-preview { transition: opacity 0.3s ease; }
+
+/* Efekat kad se pojavi preview slike */
+.preview-mode #camera-preview { display: none; }
+.preview-mode #image-preview-container { display: block; }
+
+/* Dugme za slikanje */
+#btn-capture {
+  box-shadow: 0 0 0 4px rgba(255,255,255,0.2);
+}
