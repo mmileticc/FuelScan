@@ -143,3 +143,13 @@ nav button[data-target="scan"]:active {
 ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
 :focus-visible { outline: 2px solid #38bdf8; outline-offset: 2px; }
 ::placeholder { color: #475569; }
+
+#stats-cheapest-station, 
+#stats-expensive-station {
+  display: block;          /* Osigurava da element zauzima svoj red */
+  max-width: 100%;         /* Sprečava iskakanje iz roditeljskog kontejnera */
+  white-space: nowrap;     /* Zabranjuje prelamanje teksta u novi red */
+  overflow: hidden;        /* Sakriva višak teksta koji se preliva */
+  text-overflow: ellipsis; /* Dodaje magične tri tačke (...) na kraj skraćenog teksta */
+  cursor: help;            /* Menja kursor u znak pitanja/pomoć na desktopu da nagovesti hover */
+}
