@@ -8,7 +8,8 @@ import {
   renderHistoryList,
   setupDeleteHandler,
   clearDashboard,
-  renderStatistics
+  renderStatistics,
+  getMonthlyComparison
 } from "./ui/index.js";
 import { fetchUserReceipts, saveReceiptToSupabase, deleteReceipt } from "./api.js";
 import { startCamera, stopCamera, bindScannerUI, handleScan, resetScannerState } from "./scanner.js";
@@ -23,15 +24,32 @@ async function loadDashboardData() {
       return;
     }
 
-    const totalLiters = receipts.reduce((s, r) => s + (Number(r.liters) || 0), 0);
-    const totalSpent = receipts.reduce((s, r) => s + (Number(r.total) || 0), 0);
-    const avgPrice = totalLiters > 0 ? totalSpent / totalLiters : 0;
-    const lastReceipt = receipts[0];
+    // 1. Ažuriraj "Poslednje punjenje"
+    const last = receipts[0];
+    // Ažuriraj poslednje punjenje
+    document.getElementById("stat-last-date").textContent = last.date 
+        ? new Date(last.date).toLocaleDateString("sr-RS") 
+        : "---";
+    document.getElementById("stat-last-total").textContent = last.total 
+        ? `${Number(last.total).toFixed(0)} RSD` 
+        : "---";
+    
 
-    document.getElementById("stat-liters").textContent = `${totalLiters.toFixed(1)} L`;
-    document.getElementById("stat-total").textContent = `${totalSpent.toFixed(0)} RSD`;
-    document.getElementById("stat-avg-price").textContent = `${avgPrice.toFixed(2)}`;
-    document.getElementById("stat-last").textContent = lastReceipt.date ? new Date(lastReceipt.date).toLocaleDateString("sr-RS") : "—";
+    // 2. Mesečni proračun
+    const comparison = getMonthlyComparison(receipts);
+
+    // --- OVO JE KLJUČNO: Ovde upisuješ vrednosti ---
+    document.getElementById("stat-month-spent").textContent = `${comparison.totals.thisSpent.toFixed(0)} RSD`;
+    document.getElementById("stat-month-liters").textContent = `${comparison.totals.thisLiters.toFixed(1)} L`;
+
+    // 3. Ažuriraj tekstove ispod (Diff)
+    const spentEl = document.getElementById("stat-spent-diff");
+    spentEl.textContent = comparison.spent.text;
+    spentEl.className = `text-[10px] font-mono mt-1 ${comparison.spent.isIncrease ? 'text-red-500' : 'text-green-500'}`;
+
+    const litersEl = document.getElementById("stat-liters-diff");
+    litersEl.textContent = comparison.liters.text;
+    litersEl.className = `text-[10px] font-mono mt-1 ${comparison.liters.isIncrease ? 'text-red-500' : 'text-green-500'}`;
 
     renderRecentTransactions(receipts.slice(0, 3));
     renderHistoryList(receipts);
@@ -41,7 +59,7 @@ async function loadDashboardData() {
         try {
             await deleteReceipt(id);
             showToast("Zapis obrisan.", "success");
-            loadDashboardData(); // Osveži listu
+            await loadDashboardData(); // Osveži listu
         } catch (err) {
             showToast("Greška pri brisanju: " + err.message, "error");
         }
@@ -138,8 +156,6 @@ function bindNavigation() {
     showToast("Račun odbačen.", "info");
   });
 
-
-  // Osluškivanje klikova na filtere perioda unutar Statistike
   document.querySelectorAll(".btn-period").forEach((btn) => {
     btn.addEventListener("click", () => {
       // Menjamo vizuelni stil dugmića (aktivno/neaktivno)
