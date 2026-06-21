@@ -68,7 +68,7 @@ export function getMonthlyComparison(receipts) {
     console.log("Suma ovog meseca (RSD):", thisSpent, "Suma ovog meseca (L):", thisLiters);
 
     const getDiff = (curr, prev) => {
-        if (prev === 0) return { text: "Nema podataka", isIncrease: false };
+        if (prev === 0) return { text: "", isIncrease: false };
         const diff = curr - prev;
         const percent = ((diff / prev) * 100).toFixed(0);
         return { 
