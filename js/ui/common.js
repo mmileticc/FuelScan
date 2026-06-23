@@ -1,6 +1,6 @@
 import { clearDashboard } from "./dashboard.js";
 
-export const SCREENS = ["dashboard", "scan", "history", "result", "statistics"];
+export const SCREENS = ["welcome", "dashboard", "scan", "history", "result", "statistics"];
 
 export function showToast(message, type = "info", duration = 3000) {
   const toast = document.getElementById("toast");

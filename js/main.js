@@ -69,10 +69,19 @@ async function loadDashboardData() {
   }
 }
 
+
+
 function bindNavigation() {
   document.querySelectorAll(".nav-tab").forEach((tab) => {
     tab.addEventListener("click", async () => {
       const target = tab.dataset.target;
+
+      if (!getCurrentUser()) {
+        showToast("Morate se prijaviti da biste pristupili ovoj sekciji.", "warning");
+        showScreen("welcome");
+        return;
+      }
+
       showScreen(target);
 
       if (target === "scan") {
@@ -106,6 +115,16 @@ function bindNavigation() {
         }
       }
     });
+  });
+
+
+  // OVO JE NOVO: Povezivanje dugmeta sa Welcome ekrana
+  document.getElementById("btn-login-welcome")?.addEventListener("click", async () => {
+    try {
+      await signInWithGoogle();
+    } catch (err) {
+      showToast(err.message || "Greška pri prijavi.", "error");
+    }
   });
 
   document.getElementById("btn-login")?.addEventListener("click", async () => {
@@ -174,16 +193,17 @@ function bindNavigation() {
 window.addEventListener("DOMContentLoaded", async () => {
   bindNavigation();
   bindScannerUI();
-  showScreen("dashboard");
 
   await initAuth();
 
   onAuthReady((user) => {
     if (user) {
       handleSignedInUI(user);
+      showScreen("dashboard"); // Ako je ulogovan, baci ga na dashboard
       loadDashboardData();
     } else {
       handleSignedOutUI();
+      showScreen("welcome"); // OVO JE KLJUČNO: Ako nije ulogovan, baci ga na Welcome sa uputstvom!
     }
   });
 
