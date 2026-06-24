@@ -66,39 +66,45 @@ export function showImagePreview(file) {
   const reader = new FileReader();
   const previewContainer = document.getElementById("image-preview-container");
   const imgElement = document.getElementById("image-preview");
+  const placeholder = document.getElementById("camera-placeholder");
 
   reader.onload = (e) => {
     if(imgElement) imgElement.src = e.target.result;
     if(video) video.style.display = "none";
     if(previewContainer) previewContainer.classList.remove("hidden");
+
+    if(placeholder) placeholder.classList.add("hidden");
   };
   reader.readAsDataURL(file);
 }
 
 async function processImage(file) {
   try {
-    // Ne prebacujemo još uvek ekran - ostavljamo korisnika da vidi "preview" slike!
     setScanStatus("Tražim QR kod na slici...", "loading");
-
     const qrCode = await scanQrFromBlob(file);
     
-    // Kad pronađe QR kod, tek onda prebacujemo na rezultat
     showScreen("result");
     renderResultCard(null, "loading");
     
-    // Gasimo kameru jer smo prešli na sledeći ekran
-    await stopCamera();
+    await stopCamera(); // Ovo unutra poziva updateToggleUI(false)
 
     const receiptData = await parseReceipt(qrCode);
     renderResultCard(receiptData, "success");
     window.__pendingReceipt = receiptData;
   } catch (err) {
-    // Ako ne uspe da obradi sliku ili nađe QR
-    showScreen("result");
-    renderResultCard(null, "error", err.message);
-    setScanStatus("Greška pri obradi.", "error");
     showToast(err.message || "Greška pri obradi.", "error");
-    await stopCamera();
+    setScanStatus("Nije pronađen QR. Pokušajte ponovo.", "error");
+
+    // --- POPRAVKA OVDE ---
+    // 1. Sakrij preview slike
+    const previewContainer = document.getElementById("image-preview-container");
+    if(previewContainer) previewContainer.classList.add("hidden");
+    
+    // 2. Osiguraj da se video sakrije (jer je kamera zapravo ugašena ili neuspešna)
+    if(video) video.style.display = "none";
+    
+    // 3. Pozovi updateToggleUI(false) da se pravilno pokaže placeholder
+    updateToggleUI(false); 
   } finally {
     const fileInput = document.getElementById("file-input");
     if (fileInput) fileInput.value = ""; 
@@ -225,18 +231,35 @@ export async function scanQrFromBlob(file) {
     throw new Error("Nije pronađen QR kod. Pokušajte ponovo sa boljim osvetljenjem.");
   }
 }
-
-// Pomoćna funkcija koja menja izgled toggle dugmeta
 function updateToggleUI(isOn) {
   const iconOn = document.getElementById("icon-cam-on");
   const iconOff = document.getElementById("icon-cam-off");
-  if (!iconOn || !iconOff) return;
+  const placeholder = document.getElementById("camera-placeholder");
+  const video = document.getElementById("camera-preview");
+  const imagePreviewContainer = document.getElementById("image-preview-container");
 
   if (isOn) {
     iconOn.classList.remove("hidden");
     iconOff.classList.add("hidden");
+    placeholder.classList.add("hidden");
+    
+    // Obavezno stavi display block OVDE
+    video.style.display = "block";
+    video.classList.remove("hidden");
+    imagePreviewContainer.classList.add("hidden"); 
   } else {
     iconOn.classList.add("hidden");
     iconOff.classList.remove("hidden");
+    video.classList.add("hidden");
+    video.style.display = "none"; // Eksplicitno sakrij
+    
+    // Provera da li prikazujemo preview slike
+    const isShowingPreview = !imagePreviewContainer.classList.contains("hidden");
+    
+    if (isShowingPreview) {
+      placeholder.classList.add("hidden");
+    } else {
+      placeholder.classList.remove("hidden");
+    }
   }
 }

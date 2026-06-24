@@ -191,6 +191,13 @@
 
         </button>
 
+        <div id="camera-placeholder" class="absolute inset-0 flex flex-col items-center justify-center text-slate-700">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-16 h-16 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.66-.9l.82-1.23A2 2 0 019.93 4h4.14a2 2 0 011.66.9l.82 1.23A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+          </svg>
+          <p class="text-sm">Kamera je isključena</p>
+        </div>
+
         <video id="camera-preview" class="w-full h-full object-cover" autoplay playsinline></video>
         <div id="image-preview-container" class="hidden w-full h-full">
           <img id="image-preview" class="w-full h-full object-contain" />
