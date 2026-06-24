@@ -100,11 +100,15 @@ async function processImage(file) {
     const previewContainer = document.getElementById("image-preview-container");
     if(previewContainer) previewContainer.classList.add("hidden");
     
-    // 2. Osiguraj da se video sakrije (jer je kamera zapravo ugašena ili neuspešna)
-    if(video) video.style.display = "none";
+    // 2. VRATI VIDEO NA EKRAN (Kamera je i dalje aktivna u pozadini)
+    if(video) {
+        video.style.display = "block";
+        video.classList.remove("hidden");
+    }
+
+    // 3. Ažuriraj UI da ikonice znaju da je kamera zapravo UPALJENA
+    updateToggleUI(true);
     
-    // 3. Pozovi updateToggleUI(false) da se pravilno pokaže placeholder
-    updateToggleUI(false); 
   } finally {
     const fileInput = document.getElementById("file-input");
     if (fileInput) fileInput.value = ""; 
