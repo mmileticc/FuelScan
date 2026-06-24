@@ -22,7 +22,7 @@ export async function startCamera() {
     if (!navigator.mediaDevices?.getUserMedia) {
       setScanStatus("Kamera nije dostupna. Koristi učitavanje slike.", "warning");
       if (video) video.style.display = "none";
-      updateToggleUI(false); // UI: Kamera ne radi
+      updateToggleUI(false); 
       return;
     }
 
@@ -70,7 +70,7 @@ export function showImagePreview(file) {
 
   reader.onload = (e) => {
     if(imgElement) imgElement.src = e.target.result;
-    if(video) video.style.display = "none";
+    if(video) video.classList.add("hidden");
     if(previewContainer) previewContainer.classList.remove("hidden");
 
     if(placeholder) placeholder.classList.add("hidden");
@@ -95,20 +95,17 @@ async function processImage(file) {
     showToast(err.message || "Greška pri obradi.", "error");
     setScanStatus("Nije pronađen QR. Pokušajte ponovo.", "error");
 
-    // --- POPRAVKA OVDE ---
-    // 1. Sakrij preview slike
+    // 1. Sklanjamo prikazane slike
     const previewContainer = document.getElementById("image-preview-container");
     if(previewContainer) previewContainer.classList.add("hidden");
     
-    // 2. VRATI VIDEO NA EKRAN (Kamera je i dalje aktivna u pozadini)
-    if(video) {
-        video.style.display = "block";
-        video.classList.remove("hidden");
+    // 2. KLJUČNO: Vraćamo UI u prethodno stanje kamere!
+    if (cameraStream) {
+      updateToggleUI(true);  // Ako je kamera radila, ostaje ON
+    } else {
+      updateToggleUI(false); // Ako nije radila, vraća se placeholder OFF
     }
 
-    // 3. Ažuriraj UI da ikonice znaju da je kamera zapravo UPALJENA
-    updateToggleUI(true);
-    
   } finally {
     const fileInput = document.getElementById("file-input");
     if (fileInput) fileInput.value = ""; 
@@ -221,7 +218,7 @@ export async function resetScannerState() {
   
   if(previewContainer) previewContainer.classList.add("hidden");
   if(imgElement) imgElement.src = "";
-  if(video) video.style.display = "block";
+  
   updateToggleUI(false); 
 }
 
@@ -242,22 +239,22 @@ function updateToggleUI(isOn) {
   const video = document.getElementById("camera-preview");
   const imagePreviewContainer = document.getElementById("image-preview-container");
 
+  // Brišemo bilo kakav zaostali inline stil da nas ne sabotira
+  if (video) video.style.display = ""; 
+
   if (isOn) {
     iconOn.classList.remove("hidden");
     iconOff.classList.add("hidden");
     placeholder.classList.add("hidden");
     
-    // Obavezno stavi display block OVDE
-    video.style.display = "block";
     video.classList.remove("hidden");
     imagePreviewContainer.classList.add("hidden"); 
   } else {
     iconOn.classList.add("hidden");
     iconOff.classList.remove("hidden");
-    video.classList.add("hidden");
-    video.style.display = "none"; // Eksplicitno sakrij
     
-    // Provera da li prikazujemo preview slike
+    video.classList.add("hidden");
+    
     const isShowingPreview = !imagePreviewContainer.classList.contains("hidden");
     
     if (isShowingPreview) {
