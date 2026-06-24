@@ -11,7 +11,7 @@ export function renderHistoryList(receipts) {
     const locationText = [r.address, r.city].filter(Boolean).join(", ") || "Nepoznata lokacija";
     
     return `
-    <li class="history-item bg-surface-card border border-surface-border rounded-xl px-4 py-4 space-y-2 cursor-pointer" data-id="${r.id}">
+    <li class="history-item relative bg-surface-card border border-surface-border rounded-xl px-4 py-4 space-y-2 cursor-pointer" data-id="${r.id}">
       <div class="flex items-start justify-between">
         <div>
           <p class="font-semibold leading-tight">${r.station ?? "Nepoznata stanica"}</p>
@@ -61,7 +61,7 @@ export function setupDeleteHandler(onDeleteCallback) {
           menuOpened = true;
           if (navigator.vibrate) navigator.vibrate(50);
           
-          showDeleteMenu(e.clientX, e.clientY, () => {
+          showDeleteMenu(item, () => {
             onDeleteCallback(item.dataset.id);
           });
           isPressing = false;
@@ -114,23 +114,13 @@ export function setupDeleteHandler(onDeleteCallback) {
   }
 }
 
-export function showDeleteMenu(x, y, onConfirm) {
-  document.getElementById("floating-delete-menu")?.remove();
+export function showDeleteMenu(itemElement, onConfirm) {
+ document.getElementById("floating-delete-menu")?.remove();
 
   const menu = document.createElement('div');
   menu.id = "floating-delete-menu";
-  menu.className = "absolute z-[100] bg-red-600 text-white px-5 py-2.5 rounded-xl shadow-2xl cursor-pointer font-bold text-sm flex items-center gap-2";
   
-  const bodyRect = document.body.getBoundingClientRect();
-  const localX = x - bodyRect.left;
-  const localY = y - bodyRect.top;
-
-  const safeX = Math.min(localX, bodyRect.width - 140);
-  const safeY = Math.min(localY, bodyRect.height - 60);
-  
-  menu.style.left = `${safeX}px`;
-  menu.style.top = `${safeY}px`;
-  menu.innerHTML = `Obriši`;
+menu.className = "absolute z-[100] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-red-600 text-white px-6 py-3 rounded-xl shadow-lg cursor-pointer font-bold text-sm whitespace-nowrap";  menu.innerHTML = `Obriši`;
 
   menu.onclick = (e) => {
     e.stopPropagation(); 
@@ -144,7 +134,7 @@ export function showDeleteMenu(x, y, onConfirm) {
     menu.remove();
   };
 
-  document.body.appendChild(menu);
+  itemElement.appendChild(menu);
   
   const closeMenu = (e) => {
     if (!menu.contains(e.target)) {
