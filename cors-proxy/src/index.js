@@ -40,12 +40,36 @@
 
 const ALLOWED_HOSTS = ['suf.purs.gov.rs'];
 
-const BROWSER_HEADERS = {
+// Rezervni headeri - koriste se SAMO ako ih korisnikov pravi browser iz nekog
+// razloga nije poslao uopšte (retko, ali moguće kod nekih embedded/webview
+// konteksta). Kad god je moguće, prosleđujemo STVARNE headere iz dolaznog
+// zahteva (vidi buildUpstreamHeaders ispod) umesto ovog fiksnog fallback-a -
+// identičan hardkodovan User-Agent/Accept-Language na SVAKOM zahtevu od SVAKOG
+// korisnika je sam po sebi sumnjiv "otisak" (nikad se ne menja, nikad ne
+// odgovara stvarnoj raznolikosti pravih uređaja/browsera).
+const FALLBACK_HEADERS = {
   'User-Agent':
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
   'Accept-Language': 'sr-RS,sr;q=0.9',
-  Referer: 'https://suf.purs.gov.rs/',
 };
+
+/**
+ * Sastavlja headere za upstream zahtev tako da što više liče na headere koje
+ * bi PRAVI browser korisnika sam poslao da je direktno otvorio suf.purs.gov.rs
+ * (umesto da svi korisnici Worker-a dele identičan, statičan otisak).
+ */
+function buildUpstreamHeaders(request) {
+  const headers = {
+    'User-Agent': request.headers.get('User-Agent') || FALLBACK_HEADERS['User-Agent'],
+    'Accept-Language': request.headers.get('Accept-Language') || FALLBACK_HEADERS['Accept-Language'],
+    Accept: request.headers.get('Accept') || 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    // Referer namerno ostaje fiksan na suf.purs.gov.rs, jer je to isti Referer
+    // koji šalje i njihova SOPSTVENA stranica kad interno (AJAX-om) učitava
+    // specifikaciju računa - dakle, očekivan header, ne veštački dodatak.
+    Referer: 'https://suf.purs.gov.rs/',
+  };
+  return headers;
+}
 
 /**
  * Reflektuje tačan Origin zahteva (obavezno za credentialed CORS - ne sme biti '*').
@@ -104,7 +128,7 @@ export default {
 
     const init = {
       method: request.method,
-      headers: { ...BROWSER_HEADERS },
+      headers: buildUpstreamHeaders(request),
     };
 
     // Prosledi nazad kolačić koji je browser sačuvao od NAŠEG prethodnog
