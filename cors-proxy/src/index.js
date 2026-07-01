@@ -47,14 +47,23 @@ const BROWSER_HEADERS = {
   Referer: 'https://suf.purs.gov.rs/',
 };
 
-/** Reflektuje tačan Origin zahteva (obavezno za credentialed CORS - ne sme biti '*'). */
-function corsHeaders(origin) {
+/**
+ * Reflektuje tačan Origin zahteva (obavezno za credentialed CORS - ne sme biti '*').
+ *
+ * VAŽNO: kad je 'Access-Control-Allow-Credentials: true', browser NE tretira
+ * '*' u 'Access-Control-Allow-Headers'/'Access-Control-Allow-Methods' kao
+ * wildcard - uzima ga bukvalno kao ime jednog headera/metode. Zato mora da se
+ * vrati tačna, eksplicitna lista (ili da se reflektuje 'Access-Control-Request-Headers'
+ * iz preflight zahteva), inače browser blokira svaki custom header
+ * (npr. 'X-Requested-With') sa "not allowed by Access-Control-Allow-Headers".
+ */
+function corsHeaders(origin, requestedHeaders) {
   return {
     'Access-Control-Allow-Origin': origin || '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': '*',
+    'Access-Control-Allow-Headers': requestedHeaders || 'Content-Type, X-Requested-With',
     'Access-Control-Allow-Credentials': 'true',
-    Vary: 'Origin',
+    Vary: 'Origin, Access-Control-Request-Headers',
   };
 }
 
@@ -67,9 +76,12 @@ function rewriteSetCookieForCrossSite(rawCookie) {
 export default {
   async fetch(request) {
     const origin = request.headers.get('Origin') || '*';
+    // Preflight šalje TAČNO koje headere sledeći pravi zahtev planira da pošalje -
+    // reflektujemo ih nazad umesto da hardkodiramo listu koja može da zastari.
+    const requestedHeaders = request.headers.get('Access-Control-Request-Headers') || undefined;
 
     if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: corsHeaders(origin) });
+      return new Response(null, { headers: corsHeaders(origin, requestedHeaders) });
     }
 
     const requestUrl = new URL(request.url);
@@ -110,7 +122,22 @@ export default {
       init.headers['X-Requested-With'] = 'XMLHttpRequest';
     }
 
-    const upstreamResponse = await fetch(targetUrl.toString(), init);
+    let upstreamResponse;
+    try {
+      upstreamResponse = await fetch(targetUrl.toString(), init);
+    } catch (err) {
+      // Ako suf.purs.gov.rs ne odgovori (spor server, mreža, itd.) vratimo
+      // JASNU grešku SA CORS zaglavljima, umesto da Cloudflare vrati goli 504
+      // bez CORS headera (što bi browser prijavio kao još konfuzniju grešku).
+      return new Response(
+        JSON.stringify({ success: false, message: 'Poreska uprava trenutno ne odgovara. Pokušajte ponovo.' }),
+        {
+          status: 502,
+          headers: { ...corsHeaders(origin), 'Content-Type': 'application/json; charset=utf-8' },
+        },
+      );
+    }
+
     const body = await upstreamResponse.text();
 
     const responseHeaders = new Headers({
