@@ -66,10 +66,17 @@ export class ReceiptService {
     );
   }
 
-  /** 1. Fetch HTML-a preko proxy-ja (HttpClient, ne direktan poziv zbog CORS-a). */
+  /**
+   * 1. Fetch HTML-a preko proxy-ja (HttpClient, ne direktan poziv zbog CORS-a).
+   *
+   * `withCredentials: true` je OBAVEZNO ovde: proxy vraća session cookie sa
+   * suf.purs.gov.rs (rewrite-ovan za cross-site upotrebu), a bez ovog flega
+   * browser bi taj Set-Cookie ignorisao i sledeći POST /specifications bi
+   * pao (suf.purs.gov.rs vraća `success:false` bez validne sesije).
+   */
   private fetchReceiptHtml$(receiptUrl: string): Observable<string> {
     const proxiedUrl = `${CORS_PROXY_URL}${encodeURIComponent(receiptUrl)}`;
-    return this.http.get(proxiedUrl, { responseType: 'text' });
+    return this.http.get(proxiedUrl, { responseType: 'text', withCredentials: true });
   }
 
   /**
@@ -136,8 +143,11 @@ export class ReceiptService {
     // browsera sa drugog origin-a biva blokiran identično kao GET.
     const proxiedUrl = `${CORS_PROXY_URL}${encodeURIComponent(TAX_AUTHORITY_SPECIFICATIONS_URL)}`;
 
+    // withCredentials: true - šalje nazad kolačić koji je proxy postavio u
+    // koraku 1 (fetchReceiptHtml$), da bi ga proxy prosledio suf.purs.gov.rs-u.
     return this.http.post<SpecificationsApiResponse>(proxiedUrl, body, {
       headers,
+      withCredentials: true,
     });
   }
 
