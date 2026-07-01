@@ -7,6 +7,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { Router } from '@angular/router';
 import { Html5Qrcode } from 'html5-qrcode';
 
 import { ParsedReceipt } from '../../core/models/receipt.model';
@@ -30,18 +31,31 @@ interface ScanStatus {
  *      kao stari `setTimeout(() => startCamera(), 50)` u `bindNavigation`)
  *      ili upload slike / snimak sa kamere.
  *   2. QR kod se dekodira lokalno preko `html5-qrcode` (Html5Qrcode.scanFile).
- *   3. Dekodovan URL se prosleđuje `ReceiptService.scanReceipt$()`, koji sada
- *      radi ceo posao (fetch preko proxy-ja + POST /specifications + upis u
- *      Supabase) umesto starog `POST /parse-receipt` ka Playwright backend-u.
+ *   3. Dekodovan URL se prosleđuje `ReceiptService.scanReceipt$()`, koji radi
+ *      fetch preko proxy-ja + POST /specifications (umesto starog
+ *      `POST /parse-receipt` ka Playwright backend-u) i vraća parsiran
+ *      račun NA PREGLED - upis u Supabase se dešava tek kad korisnik klikne
+ *      "Sačuvaj" (isti "Sačuvaj"/"Odbaci" tok kao stari `window.__pendingReceipt`).
+ *
+ * Layout napomena: kamera ima OGRANIČENU visinu (aspect-ratio + max-h-[48vh])
+ * umesto da flex-1 puni ceo ekran - inače bi na malim ekranima gurala status
+ * tekst/dugmad/rezultat van vidljive oblasti i sekcija se ne bi lepo skrolovala.
+ *
+ * Laserska animacija preko kamere (`.scanning-active` klasa, vidi
+ * `isScanningVisualActive()`) radi samo dok je kamera upaljena ili dok se
+ * uslikana/uploadovana slika stvarno obrađuje - ne vrti se stalno bez razloga.
  */
 @Component({
   selector: 'app-scan',
   standalone: true,
   template: `
-    <section class="flex flex-col h-[calc(100dvh-4rem)]">
+    <section class="flex flex-col pb-4">
       <div id="qr-reader" class="qr-reader-hidden"></div>
 
-      <div class="camera-viewport relative flex-1 overflow-hidden bg-slate-900">
+      <div
+        class="camera-viewport relative w-full aspect-[3/4] max-h-[48vh] overflow-hidden bg-slate-900 shrink-0"
+        [class.scanning-active]="isScanningVisualActive()"
+      >
         <button
           type="button"
           (click)="toggleCamera()"
@@ -130,9 +144,24 @@ interface ScanStatus {
               <p class="text-xl font-bold font-mono text-fuel-400">{{ data.total ?? '—' }}</p>
             </div>
           </div>
-          <button type="button" (click)="resetScan()" class="w-full bg-fuel-600 hover:bg-fuel-500 font-semibold py-2.5 rounded-xl transition-colors">
-            Skeniraj novi račun
-          </button>
+          <div class="flex gap-3">
+            <button
+              type="button"
+              [disabled]="isSaving()"
+              (click)="discardReceipt()"
+              class="flex-1 bg-slate-700 hover:bg-slate-600 font-semibold py-2.5 rounded-xl transition-colors disabled:opacity-40"
+            >
+              Odbaci
+            </button>
+            <button
+              type="button"
+              [disabled]="isSaving()"
+              (click)="saveReceipt()"
+              class="flex-1 bg-fuel-600 hover:bg-fuel-500 font-semibold py-2.5 rounded-xl transition-colors disabled:opacity-60"
+            >
+              {{ isSaving() ? 'Čuvam...' : 'Sačuvaj' }}
+            </button>
+          </div>
         </div>
       }
     </section>
@@ -141,6 +170,7 @@ interface ScanStatus {
 export class ScanComponent implements OnInit, OnDestroy {
   private readonly receiptService = inject(ReceiptService);
   private readonly toast = inject(ToastService);
+  private readonly router = inject(Router);
 
   @ViewChild('videoPreview') private videoRef?: ElementRef<HTMLVideoElement>;
 
@@ -153,6 +183,16 @@ export class ScanComponent implements OnInit, OnDestroy {
   readonly resultState = signal<'idle' | 'loading' | 'success' | 'error'>('idle');
   readonly receipt = signal<ParsedReceipt | null>(null);
   readonly errorMessage = signal<string | null>(null);
+  readonly isSaving = signal(false);
+
+  /**
+   * Laserska animacija preko kamere se pali SAMO dok je nešto zaista aktivno
+   * (kamera radi, ili je slika uhvaćena/uploadovana i stvarno se obrađuje) -
+   * ne treba da se vrti stalno bez razloga.
+   */
+  isScanningVisualActive(): boolean {
+    return this.cameraActive() || this.resultState() === 'loading';
+  }
 
   ngOnInit(): void {
     // Isto ponašanje kao stari `setTimeout(() => startCamera(), 50)` pri ulasku na scan ekran.
@@ -300,8 +340,7 @@ export class ScanComponent implements OnInit, OnDestroy {
       next: (parsedReceipt) => {
         this.receipt.set(parsedReceipt);
         this.resultState.set('success');
-        this.scanStatus.set({ message: 'Račun uspešno sačuvan', type: 'success' });
-        this.toast.show('Račun je uspešno sačuvan!', 'success');
+        this.scanStatus.set({ message: 'Račun pronađen - proverite podatke', type: 'success' });
       },
       error: (err: Error) => {
         this.resultState.set('error');
@@ -310,6 +349,34 @@ export class ScanComponent implements OnInit, OnDestroy {
         this.toast.show(err.message || 'Greška pri obradi.', 'error');
       },
     });
+  }
+
+  /** Isti trenutak kao stari `btn-save-result` handler - upis se dešava TEK ovde. */
+  saveReceipt(): void {
+    const pendingReceipt = this.receipt();
+    if (!pendingReceipt || this.isSaving()) {
+      return;
+    }
+
+    this.isSaving.set(true);
+    this.receiptService.saveReceipt$(pendingReceipt).subscribe({
+      next: () => {
+        this.isSaving.set(false);
+        this.toast.show('Račun je sačuvan!', 'success');
+        this.resetScan();
+        void this.router.navigate(['/dashboard']);
+      },
+      error: (err: Error) => {
+        this.isSaving.set(false);
+        this.toast.show(err.message || 'Greška pri čuvanju.', 'error');
+      },
+    });
+  }
+
+  /** Isti trenutak kao stari `btn-discard-result` handler - račun se baca, bez upisa. */
+  discardReceipt(): void {
+    this.toast.show('Račun odbačen.', 'info');
+    this.resetScan();
   }
 
   private getFileQrScanner(): Html5Qrcode {

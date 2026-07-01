@@ -39,7 +39,11 @@ import { cleanStationName, normalizeText, parseLocalReceiptDate, parseNumber } f
  *      interno šalje na klik, samo pozvan direktno (preko proxy-ja), bez
  *      potrebe za headless browserom.
  *   4. Rezultat se mapira u ParsedReceipt (ista polja kao stari /parse-receipt
- *      odgovor) i automatski upisuje u Supabase `fuel_receipts` tabelu.
+ *      odgovor) i vraća korisniku NA PREGLED - upis u Supabase NIJE
+ *      automatski. Isto kao stari `window.__pendingReceipt` tok
+ *      (`old-vanilla/js/scanner.js` + `main.js`): korisnik mora da klikne
+ *      "Sačuvaj" (`btn-save-result`) da bi se račun upisao, ili "Odbaci"
+ *      (`btn-discard-result`) da ga baci.
  */
 @Injectable({ providedIn: 'root' })
 export class ReceiptService {
@@ -47,7 +51,7 @@ export class ReceiptService {
 
   /**
    * Glavna ulazna tačka - poziva se sa URL-om dekodovanim iz QR koda.
-   * Vraća potpuno parsiran i (automatski) sačuvan račun.
+   * Vraća potpuno parsiran račun (JOŠ NIJE sačuvan u bazi).
    */
   scanReceipt$(receiptUrl: string): Observable<ParsedReceipt> {
     if (!receiptUrl || !receiptUrl.includes(SUF_ALLOWED_HOST)) {
@@ -61,9 +65,17 @@ export class ReceiptService {
           map((specs) => this.buildParsedReceipt(metadata, specs, receiptUrl)),
         ),
       ),
-      switchMap((receipt) => this.saveReceiptToSupabase$(receipt).pipe(map(() => receipt))),
       catchError((err) => throwError(() => (err instanceof Error ? err : new Error(String(err))))),
     );
+  }
+
+  /**
+   * Poziva se tek kad korisnik eksplicitno klikne "Sačuvaj" na kartici
+   * rezultata (isti trenutak kao stari `btn-save-result` handler u
+   * `main.js`, koji je zvao `saveReceiptToSupabase(window.__pendingReceipt)`).
+   */
+  saveReceipt$(receipt: ParsedReceipt): Observable<true> {
+    return this.saveReceiptToSupabase$(receipt);
   }
 
   /**
@@ -195,8 +207,8 @@ export class ReceiptService {
   }
 
   /**
-   * 5. Automatski upis u Supabase `fuel_receipts` tabelu nakon uspešnog
-   *    parsiranja (isti red kao `saveReceiptToSupabase` iz old-vanilla/js/api.js).
+   * 5. Upis u Supabase `fuel_receipts` tabelu NA ZAHTEV korisnika (dugme
+   *    "Sačuvaj"), isti red kao `saveReceiptToSupabase` iz `old-vanilla/js/api.js`.
    */
   private saveReceiptToSupabase$(receipt: ParsedReceipt): Observable<true> {
     return from(supabaseClient.auth.getUser()).pipe(

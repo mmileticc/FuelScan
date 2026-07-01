@@ -47,7 +47,7 @@ body {
 }
 
 main {
-  padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
 }
 
 nav {
@@ -82,14 +82,19 @@ nav a[routerLink='/scan']:active {
   border: 1px solid rgba(255, 255, 255, 0.05) !important;
 }
 
-/* Skener i kamera - "laserski" efekat preko kamere dok skenira */
+/*
+ * Skener i kamera - "laserski" efekat preko kamere. Animacija se pali SAMO
+ * kad kamera-viewport ima klasu `.scanning-active` (kamera je upaljena, ili
+ * se stvarno obrađuje uslikana/uploadovana slika) - ne vrti se stalno kad
+ * ekran samo miruje.
+ */
 .camera-viewport {
   position: relative;
   border: 2px solid rgba(56, 189, 248, 0.3);
   overflow: hidden;
 }
 
-.camera-viewport::after {
+.camera-viewport.scanning-active::after {
   content: '';
   position: absolute;
   left: 0;
