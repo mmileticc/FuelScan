@@ -1,7 +1,7 @@
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, from, throwError } from 'rxjs';
-import { catchError, map, switchMap } from 'rxjs/operators';
+import { Observable, from, throwError, timer } from 'rxjs';
+import { catchError, delay, map, retry, switchMap } from 'rxjs/operators';
 
 import { CORS_PROXY_URL, SUF_ALLOWED_HOST, TAX_AUTHORITY_SPECIFICATIONS_URL } from '../config/app-config';
 import {
@@ -60,9 +60,23 @@ export class ReceiptService {
 
     return this.fetchReceiptHtml$(receiptUrl).pipe(
       map((html) => this.parseTokenAndMetadata(html)),
+      // Kratka pauza pre POST /specifications: sesijski kolačić koji je proxy
+      // upravo prepisao ume da "legne" na suf.purs.gov.rs strani sa malim
+      // kašnjenjem - POST odmah nakon GET-a povremeno naleti na trenutak kad
+      // server još ne prepoznaje sesiju kao validnu, pa vrati praznu specifikaciju.
+      delay(400),
       switchMap(({ tokenData, metadata }) =>
         this.fetchSpecifications$(tokenData).pipe(
           map((specs) => this.buildParsedReceipt(metadata, specs, receiptUrl)),
+          // Retry politika: ako Poreska uprava povremeno ne vrati stavke
+          // (`specs.success === false` / prazna specifikacija) ili mrežni
+          // poziv pukne, probaj još 2 puta sa rastućom pauzom (2s pa 4s) pre
+          // nego što se korisniku prijavi greška - upravo ovo je najčešći
+          // uzrok povremenog "Poreska uprava nije vratila stavke računa.".
+          retry({
+            count: 2,
+            delay: (_error, retryCount) => timer(2000 * retryCount),
+          }),
         ),
       ),
       catchError((err) => throwError(() => (err instanceof Error ? err : new Error(String(err))))),
