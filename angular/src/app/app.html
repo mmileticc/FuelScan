@@ -1,0 +1,91 @@
+<header class="sticky top-0 z-40 bg-surface/80 backdrop-blur-md border-b border-surface-border px-4 py-3 flex items-center justify-between safe-top">
+  <div class="flex items-center gap-2">
+    <img src="assets/icon-512x512.png" alt="FuelScan Logo" class="w-10 h-10 object-contain" />
+    <span class="text-lg font-bold tracking-tight">Fuel<span class="text-fuel-400">Scan</span></span>
+  </div>
+
+  <div class="flex items-center gap-3">
+    @if (!auth.currentUser()) {
+      <button
+        type="button"
+        (click)="login()"
+        class="text-sm font-medium px-3 py-1.5 rounded-lg bg-fuel-600 hover:bg-fuel-500 transition-colors"
+      >
+        Prijavi se
+      </button>
+    } @else {
+      <div class="flex items-center gap-2">
+        @if (auth.avatarUrl()) {
+          <img [src]="auth.avatarUrl()" alt="avatar" class="w-8 h-8 rounded-full border border-fuel-500 object-cover" />
+        }
+        <button type="button" (click)="logout()" class="text-xs text-slate-400 hover:text-slate-200 transition-colors">
+          Odjavi se
+        </button>
+      </div>
+    }
+  </div>
+</header>
+
+<main class="flex-1 overflow-y-auto">
+  <router-outlet></router-outlet>
+</main>
+
+@if (auth.currentUser()) {
+  <nav class="fixed bottom-0 left-0 right-0 z-40 bg-surface/90 backdrop-blur-md border-t border-surface-border safe-bottom">
+    <div class="flex items-center justify-around px-2 py-2">
+      <a
+        routerLink="/dashboard"
+        routerLinkActive="text-fuel-400"
+        class="nav-tab flex flex-col items-center gap-1 px-3 py-2 rounded-xl text-slate-400 hover:text-fuel-400"
+      >
+        <span class="text-xs font-medium">Početna</span>
+      </a>
+
+      <a
+        routerLink="/scan"
+        routerLinkActive="ring-2 ring-white/40"
+        class="nav-tab flex flex-col items-center gap-1 -mt-5 bg-fuel-600 hover:bg-fuel-500 text-white rounded-2xl px-5 py-3 shadow-lg"
+      >
+        <span class="text-xs font-semibold">Skeniraj</span>
+      </a>
+
+      <a
+        routerLink="/history"
+        routerLinkActive="text-fuel-400"
+        class="nav-tab flex flex-col items-center gap-1 px-3 py-2 rounded-xl text-slate-400 hover:text-fuel-400"
+      >
+        <span class="text-xs font-medium">Istorija</span>
+      </a>
+
+      <a
+        routerLink="/statistics"
+        routerLinkActive="text-fuel-400"
+        class="nav-tab flex flex-col items-center gap-1 px-3 py-2 rounded-xl text-slate-400 hover:text-fuel-400"
+      >
+        <span class="text-xs font-medium">Statistika</span>
+      </a>
+    </div>
+  </nav>
+}
+
+@if (toastService.toast(); as toast) {
+  <div class="fixed top-16 left-1/2 -translate-x-1/2 z-50 max-w-xs w-full px-4">
+    <div
+      class="text-sm px-4 py-3 rounded-xl shadow-xl text-center border"
+      [class.bg-slate-800]="toast.type === 'info'"
+      [class.border-slate-600]="toast.type === 'info'"
+      [class.text-white]="toast.type === 'info'"
+      [class.bg-emerald-900]="toast.type === 'success'"
+      [class.border-emerald-600]="toast.type === 'success'"
+      [class.text-emerald-100]="toast.type === 'success'"
+      [class.bg-amber-900]="toast.type === 'warning'"
+      [class.border-amber-600]="toast.type === 'warning'"
+      [class.text-amber-100]="toast.type === 'warning'"
+      [class.bg-red-900]="toast.type === 'error'"
+      [class.border-red-600]="toast.type === 'error'"
+      [class.text-red-100]="toast.type === 'error'"
+    >
+      {{ toast.message }}
+    </div>
+  </div>
+}

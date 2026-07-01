@@ -1,0 +1,162 @@
+/* ============================================================
+   FuelScan – globalni stilovi
+   Prenet iz `old-vanilla/style.css`, prilagođen Angular strukturi
+   (klase umesto ID-jeva vezanih za showScreen() DOM toggling).
+   ============================================================ */
+
+html {
+  background: #090d16;
+  height: 100%;
+  overflow: hidden;
+}
+
+@media (min-width: 768px) {
+  html {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: radial-gradient(circle at 50% 30%, #1e293b 0%, #05070c 100%);
+  }
+
+  body {
+    width: 420px !important;
+    height: 850px !important;
+    max-height: 92vh;
+    border-radius: 32px;
+    box-shadow:
+      0 25px 60px -15px rgba(0, 0, 0, 0.8),
+      0 0 0 12px #1e293b,
+      0 0 0 13px rgba(255, 255, 255, 0.05);
+    overflow: hidden;
+    transform: translate(0, 0);
+    position: relative;
+  }
+}
+
+body {
+  background-color: #0f172a !important;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+main {
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+}
+
+nav {
+  background: rgba(15, 23, 42, 0.8) !important;
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+nav a[routerLink='/scan'] {
+  background: linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%) !important;
+  box-sizing: border-box;
+  box-shadow: 0 8px 20px rgba(14, 165, 233, 0.4) !important;
+  border: 4px solid #0f172a !important;
+}
+
+nav a[routerLink='/scan']:active {
+  transform: scale(0.92) translateY(-16px) !important;
+}
+
+.nav-tab {
+  transition: all 0.2s ease;
+}
+.nav-tab:active {
+  transform: scale(0.9);
+}
+
+.bg-surface-card {
+  background: rgba(30, 41, 59, 0.4) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Skener i kamera - "laserski" efekat preko kamere dok skenira */
+.camera-viewport {
+  position: relative;
+  border: 2px solid rgba(56, 189, 248, 0.3);
+  overflow: hidden;
+}
+
+.camera-viewport::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #38bdf8, transparent);
+  box-shadow: 0 0 14px #38bdf8;
+  animation: scanLaserEffect 2.3s ease-in-out infinite;
+  z-index: 10;
+  pointer-events: none;
+}
+
+@keyframes scanLaserEffect {
+  0% {
+    top: 0%;
+  }
+  50% {
+    top: 100%;
+  }
+  100% {
+    top: 0%;
+  }
+}
+
+/* Čišćenje default stilova eksterne html5-qrcode biblioteke */
+.qr-reader-hidden {
+  display: none;
+}
+#qr-reader {
+  border: none !important;
+  background: #000 !important;
+}
+#qr-reader video {
+  object-fit: cover !important;
+}
+#qr-reader__dashboard_section,
+#qr-reader__header_message,
+#qr-reader__status_span,
+#qr-reader__filescan_input {
+  display: none !important;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 4px;
+}
+:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+::placeholder {
+  color: #475569;
+}
+
+.camera-preview {
+  transition: opacity 0.3s ease;
+}
+.camera-preview.hidden {
+  display: none;
+}
+
+.btn-capture {
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.2);
+}
