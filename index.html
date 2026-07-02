@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="sr" data-beasties-container>
+<head>
+  <meta charset="utf-8">
+  <title>FuelScan</title>
+  <base href="/FuelScan/">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0284c7">
+  <meta name="description" content="FuelScan - Scan fuel receipts and track your expenses automatically.">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/icon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="assets/icon-16x16.png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet">
+
+  <!--
+    NAPOMENA: Tailwind je ovde učitan preko CDN Play skripte, identično kao
+    u `old-vanilla/index.html`, radi vizuelnog identiteta bez dodatnog
+    PostCSS build koraka. Za produkciju preporučeno je preći na
+    `tailwindcss` npm paket + `tailwind.config.js` (Angular ga automatski
+    detektuje), ali CDN varijanta radi bez izmena build pipeline-a.
+  -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            fuel: { 50: "#f0f9ff", 100: "#e0f2fe", 400: "#38bdf8", 500: "#0ea5e9", 600: "#0284c7", 700: "#0369a1", 900: "#0c4a6e" },
+            surface: { DEFAULT: "#0f172a", card: "#1e293b", border: "#334155" }
+          },
+          fontFamily: {
+            display: ["DM Sans", "system-ui", "sans-serif"],
+            mono: ["JetBrains Mono", "monospace"]
+          }
+        }
+      }
+    }
+  </script>
+<style>html{background:#090d16;height:100%;overflow:hidden}@media(min-width:768px){html{display:flex;justify-content:center;align-items:center;background:radial-gradient(circle at 50% 30%,#1e293b,#05070c)}body{width:420px!important;height:850px!important;max-height:92vh;border-radius:32px;box-shadow:0 25px 60px -15px #000c,0 0 0 12px #1e293b,0 0 0 13px #ffffff0d;overflow:hidden;transform:translate(0);position:relative}}body{background-color:#0f172a!important;overscroll-behavior:none;-webkit-tap-highlight-color:transparent}</style><link rel="stylesheet" href="styles-6ZK3MVRR.css" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="styles-6ZK3MVRR.css"></noscript></head>
+<body class="bg-surface text-slate-100 font-display h-[100dvh] w-full flex flex-col select-none overflow-hidden">
+  <!--
+    Statički fallback sadržaj unutar <app-root> - Angular ga ZAMENI čim se
+    aplikacija pokrene (uobičajen "loading placeholder" obrazac), ali dok se
+    to ne desi (ili ako neki alat/bot ne izvršava JavaScript, npr. Google-ov
+    automatski proveravač Homepage URL-a za OAuth consent screen), ovaj tekst
+    je ono što se stvarno vidi u sirovom HTML-u - zato mora jasno da objasni
+    svrhu aplikacije i da sadrži link ka politici privatnosti.
+  -->
+  <app-root>
+    <div style="max-width: 480px; margin: 3rem auto; padding: 0 1.25rem; text-align: center;">
+      <h1 style="font-size: 1.5rem; font-weight: 800;">FuelScan</h1>
+      <p style="color: #94a3b8; font-size: 0.9rem; margin-top: 0.75rem;">
+        FuelScan je aplikacija za skeniranje QR koda sa fiskalnog računa za gorivo. Automatski
+        izvlači podatke o stanici, količini i ceni goriva sa javnog portala Poreske uprave Srbije,
+        i pomaže vam da pratite troškove i statistiku potrošnje goriva tokom vremena.
+      </p>
+      <p style="color: #64748b; font-size: 0.75rem; margin-top: 1.5rem;">
+        <a href="privacy.html" style="color: #38bdf8;">Politika privatnosti</a>
+      </p>
+    </div>
+  </app-root>
+<link rel="modulepreload" href="chunk-JPTBFVUL.js"><link rel="modulepreload" href="chunk-GG3IUQWR.js"><link rel="modulepreload" href="chunk-VZXNCNRW.js"><link rel="modulepreload" href="chunk-M3TUGF5R.js"><script src="polyfills-5CFQRCPP.js" type="module"></script><script src="main-3WDNNCZP.js" type="module"></script></body>
+</html>

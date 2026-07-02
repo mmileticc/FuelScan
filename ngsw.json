@@ -1,0 +1,117 @@
+{
+  "configVersion": 1,
+  "timestamp": 1783013867310,
+  "index": "/FuelScan/index.html",
+  "assetGroups": [
+    {
+      "name": "app",
+      "installMode": "prefetch",
+      "updateMode": "prefetch",
+      "cacheQueryOptions": {
+        "ignoreVary": true
+      },
+      "urls": [
+        "/FuelScan/chunk-3VSLUHNX.js",
+        "/FuelScan/chunk-GG3IUQWR.js",
+        "/FuelScan/chunk-HSUCIOTK.js",
+        "/FuelScan/chunk-JPTBFVUL.js",
+        "/FuelScan/chunk-M3TUGF5R.js",
+        "/FuelScan/chunk-QHQF5F2I.js",
+        "/FuelScan/chunk-QYGNVLQT.js",
+        "/FuelScan/chunk-VZXNCNRW.js",
+        "/FuelScan/chunk-XPNGUNUT.js",
+        "/FuelScan/chunk-YKBLDV7O.js",
+        "/FuelScan/chunk-ZD4FRTWA.js",
+        "/FuelScan/favicon.ico",
+        "/FuelScan/index.html",
+        "/FuelScan/main-3WDNNCZP.js",
+        "/FuelScan/manifest.webmanifest",
+        "/FuelScan/polyfills-5CFQRCPP.js",
+        "/FuelScan/styles-6ZK3MVRR.css"
+      ],
+      "patterns": []
+    },
+    {
+      "name": "assets",
+      "installMode": "lazy",
+      "updateMode": "prefetch",
+      "cacheQueryOptions": {
+        "ignoreVary": true
+      },
+      "urls": [
+        "/FuelScan/assets/apple-touch-icon.png",
+        "/FuelScan/assets/camera-icon.svg",
+        "/FuelScan/assets/camera-off-icon.svg",
+        "/FuelScan/assets/gallery-icon.svg",
+        "/FuelScan/assets/icon-16x16.png",
+        "/FuelScan/assets/icon-192x192.png",
+        "/FuelScan/assets/icon-32x32.png",
+        "/FuelScan/assets/icon-512x512.png",
+        "/FuelScan/icons/icon-128x128.png",
+        "/FuelScan/icons/icon-144x144.png",
+        "/FuelScan/icons/icon-152x152.png",
+        "/FuelScan/icons/icon-192x192.png",
+        "/FuelScan/icons/icon-384x384.png",
+        "/FuelScan/icons/icon-512x512.png",
+        "/FuelScan/icons/icon-72x72.png",
+        "/FuelScan/icons/icon-96x96.png"
+      ],
+      "patterns": []
+    }
+  ],
+  "dataGroups": [],
+  "hashTable": {
+    "/FuelScan/assets/apple-touch-icon.png": "4191b488f1943fe6685d76480b19ac28bb22dfc3",
+    "/FuelScan/assets/camera-icon.svg": "74e1be0938548b0ba6872d4b2f7b94c8fcd00061",
+    "/FuelScan/assets/camera-off-icon.svg": "3435190f55b3ddf4cf6858bcd3bf624a1f470cf3",
+    "/FuelScan/assets/gallery-icon.svg": "ba19c56cf7c00737eb5dbafe4e5a2fb77f4b5ed9",
+    "/FuelScan/assets/icon-16x16.png": "2150908d379caf489342280c3eba782d4f0a8e38",
+    "/FuelScan/assets/icon-192x192.png": "b81524314f1cc64c3dae340ed9fa5a835b033f96",
+    "/FuelScan/assets/icon-32x32.png": "ddd3f06f8de2cf02c2f50ae61237e6661980732a",
+    "/FuelScan/assets/icon-512x512.png": "4ff5853c9b47ea2fa795fb6bf6da6519bc4a6fc8",
+    "/FuelScan/chunk-3VSLUHNX.js": "20b7011db59bd08dcbfae068d5f0afb16752e436",
+    "/FuelScan/chunk-GG3IUQWR.js": "e7abf4a4232d347393d72085ba49a121e6b5cf6a",
+    "/FuelScan/chunk-HSUCIOTK.js": "b98c4ae10e129ecf94ec17f42062a4bff6a57555",
+    "/FuelScan/chunk-JPTBFVUL.js": "1bd5eabf68dd02f8a044f4e8149034475cf79f4e",
+    "/FuelScan/chunk-M3TUGF5R.js": "1185f0dba1e10f08861e25c207faa685f5fda8d1",
+    "/FuelScan/chunk-QHQF5F2I.js": "8513ab947e450fa0bf6d6c1cd237bc175d4eb7dc",
+    "/FuelScan/chunk-QYGNVLQT.js": "4ea7f74f9c89d592b1c97ed175b394728f0b8c16",
+    "/FuelScan/chunk-VZXNCNRW.js": "d798a59fd171ef00705c14d31bc52f72a73820f3",
+    "/FuelScan/chunk-XPNGUNUT.js": "a61e217f00d4098b9177bf4073d23826451a5f6f",
+    "/FuelScan/chunk-YKBLDV7O.js": "a2d12602265e943495b740167a29b061c038b225",
+    "/FuelScan/chunk-ZD4FRTWA.js": "f64e07560895f5a902473235385f14ffb0106c36",
+    "/FuelScan/favicon.ico": "00710a381a331ab18a8afef0fb50aa0023bed7fb",
+    "/FuelScan/icons/icon-128x128.png": "587ffc7ba0718c8cb98f3935d2e2f8a408815bf1",
+    "/FuelScan/icons/icon-144x144.png": "993d416abedd5187837e2084f07e38dd4d5f014b",
+    "/FuelScan/icons/icon-152x152.png": "26d1b8c6bc0b20cbf78722b199dd00721910d846",
+    "/FuelScan/icons/icon-192x192.png": "48514aab02037b1b663e2f954a3cb60f641fb78b",
+    "/FuelScan/icons/icon-384x384.png": "bcd9a2c9642bc4d9aa52b59dc903df9dfe1bae17",
+    "/FuelScan/icons/icon-512x512.png": "cd59450d45e04de038a5c4e06299d8b533ce4ce4",
+    "/FuelScan/icons/icon-72x72.png": "e66c265b8da80bdf1107c8e0102502f56d834bc4",
+    "/FuelScan/icons/icon-96x96.png": "d36f6e3f0175fe701e53bd5bfbb407753adebf85",
+    "/FuelScan/index.html": "e38a406b94439852859f393353142ab4fe1332d4",
+    "/FuelScan/main-3WDNNCZP.js": "828c809cde0ca5cac0ec2f2ec970bb59b138a789",
+    "/FuelScan/manifest.webmanifest": "e0ce8ca2674ffb5aadc1ddd0eb519a0ed9a1ba9a",
+    "/FuelScan/polyfills-5CFQRCPP.js": "f2241e9a25858f895ce299d15f6f22e849e2fd72",
+    "/FuelScan/styles-6ZK3MVRR.css": "a700c3b55582d64a434661d194c4d57c8e5809a6"
+  },
+  "navigationUrls": [
+    {
+      "positive": true,
+      "regex": "^\\/.*$"
+    },
+    {
+      "positive": false,
+      "regex": "^\\/(?:.+\\/)?[^/]*\\.[^/]*$"
+    },
+    {
+      "positive": false,
+      "regex": "^\\/(?:.+\\/)?[^/]*__[^/]*$"
+    },
+    {
+      "positive": false,
+      "regex": "^\\/(?:.+\\/)?[^/]*__[^/]*\\/.*$"
+    }
+  ],
+  "navigationRequestStrategy": "performance"
+}

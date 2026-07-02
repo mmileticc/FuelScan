@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="sr">
+<head>
+  <meta charset="utf-8" />
+  <title>FuelScan — Politika privatnosti</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="index, follow" />
+  <style>
+    body {
+      background: #0f172a;
+      color: #e2e8f0;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 2.5rem 1.25rem 4rem;
+      line-height: 1.6;
+    }
+    h1 { font-size: 1.75rem; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.1rem; margin-top: 2rem; color: #38bdf8; }
+    p, li { color: #cbd5e1; font-size: 0.95rem; }
+    a { color: #38bdf8; }
+    .updated { color: #64748b; font-size: 0.8rem; margin-bottom: 2rem; }
+  </style>
+</head>
+<body>
+  <h1>FuelScan — Politika privatnosti</h1>
+  <p class="updated">Poslednje ažurirano: jul 2026.</p>
+
+  <p>
+    FuelScan ("aplikacija") je alat za skeniranje fiskalnih računa za gorivo i praćenje troškova.
+    Ova stranica objašnjava koje podatke prikupljamo, zašto, i kako se čuvaju.
+  </p>
+
+  <h2>Koje podatke prikupljamo</h2>
+  <ul>
+    <li><strong>Nalog za prijavu:</strong> kada se prijavite preko Google naloga, dobijamo vaše ime, email adresu i profilnu sliku (preko Google OAuth-a, obrađuje ih Supabase Auth).</li>
+    <li><strong>Podaci sa računa:</strong> kada skenirate fiskalni račun, aplikacija čita javno dostupnu stranicu verifikacije računa na <code>suf.purs.gov.rs</code> (portal Poreske uprave Republike Srbije) i izvlači naziv stanice, vrstu goriva, količinu, cenu i ukupan iznos. Ovi podaci se čuvaju u vašem nalogu tek kada eksplicitno kliknete "Sačuvaj".</li>
+    <li><strong>Osnovna analitika korišćenja:</strong> koristimo PostHog da bismo razumeli koje funkcije se koriste (npr. broj skeniranih/sačuvanih računa), radi poboljšanja aplikacije. Ne prikupljamo sadržaj vaših računa u analitici.</li>
+  </ul>
+
+  <h2>Kako se podaci čuvaju</h2>
+  <p>
+    Podaci o računima i korisnički nalog čuvaju se u Supabase bazi podataka, zaštićeni pravilima
+    pristupa (Row Level Security) tako da svaki korisnik može da vidi i menja isključivo svoje
+    podatke. Slika sa kamere se obrađuje isključivo lokalno u vašem browseru radi čitanja QR koda i
+    nikada se ne šalje niti čuva na serveru.
+  </p>
+
+  <h2>Deljenje podataka sa trećim stranama</h2>
+  <p>
+    Ne prodajemo niti iznajmljujemo vaše podatke. Podaci se obrađuju preko sledećih servisa:
+  </p>
+  <ul>
+    <li><strong>Supabase</strong> — baza podataka i autentikacija (Google OAuth).</li>
+    <li><strong>Cloudflare Workers</strong> — tehnički posrednik koji prosleđuje zahteve ka javnom portalu Poreske uprave (ne čuva podatke).</li>
+    <li><strong>PostHog</strong> — osnovna analitika korišćenja aplikacije.</li>
+  </ul>
+
+  <h2>Brisanje podataka</h2>
+  <p>
+    Svaki sačuvan račun možete obrisati u bilo kom trenutku iz istorije u aplikaciji. Ako želite da
+    obrišete ceo nalog i sve povezane podatke, kontaktirajte nas na email ispod.
+  </p>
+
+  <h2>Kontakt</h2>
+  <p>
+    Za pitanja u vezi sa privatnošću, kontaktirajte: <a href="mailto:milinko.miletic03@gmail.com">milinko.miletic03@gmail.com</a>
+  </p>
+
+  <p><a href="./">&larr; Nazad na FuelScan</a></p>
+</body>
+</html>
