@@ -59,14 +59,18 @@ interface ScanStatus {
         <button
           type="button"
           (click)="toggleCamera()"
-          class="absolute top-4 right-4 z-50 bg-black/40 backdrop-blur-md p-3 rounded-full border border-white/20 hover:bg-black/60 transition flex items-center justify-center text-white text-lg"
+          class="absolute top-4 right-4 z-50 bg-black/40 backdrop-blur-md p-3 rounded-full border border-white/20 hover:bg-black/60 transition flex items-center justify-center"
         >
-          {{ cameraActive() ? '📷' : '🚫' }}
+          <img
+            [src]="cameraActive() ? 'assets/camera-icon.svg' : 'assets/camera-off-icon.svg'"
+            alt="Kamera"
+            class="w-5 h-5"
+          />
         </button>
 
         @if (!cameraActive() && !imagePreviewUrl()) {
           <div class="absolute inset-0 flex flex-col items-center justify-center text-slate-600 gap-2">
-            <span class="text-4xl">📷</span>
+            <img src="assets/camera-off-icon.svg" alt="Kamera isključena" class="w-10 h-10 opacity-60" />
             <p class="text-sm">Kamera je isključena</p>
           </div>
         }

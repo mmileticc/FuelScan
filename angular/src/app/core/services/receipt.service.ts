@@ -52,12 +52,24 @@ export class ReceiptService {
   /**
    * Glavna ulazna tačka - poziva se sa URL-om dekodovanim iz QR koda.
    * Vraća potpuno parsiran račun (JOŠ NIJE sačuvan u bazi).
+   *
+   * `onRetryAttempt` je opcioni callback (poziva se PRE svakog ponovnog
+   * pokušaja) da bi UI mogao da prikaže "Pokušavam ponovo..." umesto da
+   * korisnik gleda u generičan spinner i ne zna da li je nešto zapelo.
    */
-  scanReceipt$(receiptUrl: string): Observable<ParsedReceipt> {
+  scanReceipt$(receiptUrl: string, onRetryAttempt?: (attempt: number, maxAttempts: number) => void): Observable<ParsedReceipt> {
     if (!receiptUrl || !receiptUrl.includes(SUF_ALLOWED_HOST)) {
       return throwError(() => new Error(`Nevažeći URL računa: ${receiptUrl}`));
     }
 
+    const maxRetries = 2;
+
+    // VAŽNO: retry ovde obuhvata CEO lanac, od GET-a stranice računa pa do
+    // POST /specifications - NE samo POST. Ako je sesija bila neispravna već
+    // od samog GET-a (npr. jednokratan token, ili suf.purs.gov.rs jednostavno
+    // nije stigao da "upamti" sesiju), ponavljanje SAMO POST-a sa istim,
+    // već pokvarenim tokenom ne bi ništa popravilo - mora ceo ciklus ispočetka,
+    // sa potpuno svežim GET-om (pa samim tim i svežim kolačićem/tokenom).
     return this.fetchReceiptHtml$(receiptUrl).pipe(
       map((html) => this.parseTokenAndMetadata(html)),
       // Kratka pauza pre POST /specifications: sesijski kolačić koji je proxy
@@ -68,17 +80,21 @@ export class ReceiptService {
       switchMap(({ tokenData, metadata }) =>
         this.fetchSpecifications$(tokenData).pipe(
           map((specs) => this.buildParsedReceipt(metadata, specs, receiptUrl)),
-          // Retry politika: ako Poreska uprava povremeno ne vrati stavke
-          // (`specs.success === false` / prazna specifikacija) ili mrežni
-          // poziv pukne, probaj još 2 puta sa rastućom pauzom (2s pa 4s) pre
-          // nego što se korisniku prijavi greška - upravo ovo je najčešći
-          // uzrok povremenog "Poreska uprava nije vratila stavke računa.".
-          retry({
-            count: 2,
-            delay: (_error, retryCount) => timer(2000 * retryCount),
-          }),
         ),
       ),
+      // Retry politika: ako Poreska uprava povremeno ne vrati stavke
+      // (`specs.success === false` / prazna specifikacija), sesija ne "legne"
+      // na vreme, ili mrežni poziv pukne, probaj CEO ciklus (GET+POST) još
+      // 2 puta sa rastućom pauzom (1.5s pa 3s) pre nego što se korisniku
+      // prijavi greška - ovo je najčešći uzrok povremenog
+      // "Poreska uprava nije vratila stavke računa.".
+      retry({
+        count: maxRetries,
+        delay: (_error, retryCount) => {
+          onRetryAttempt?.(retryCount, maxRetries);
+          return timer(1500 * retryCount);
+        },
+      }),
       catchError((err) => throwError(() => (err instanceof Error ? err : new Error(String(err))))),
     );
   }

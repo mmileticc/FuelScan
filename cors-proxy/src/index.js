@@ -131,20 +131,32 @@ export default {
       headers: buildUpstreamHeaders(request),
     };
 
-    // Prosledi nazad kolačić koji je browser sačuvao od NAŠEG prethodnog
-    // odgovora (postavljen u koraku ispod) - to je isti kolačić koji je
-    // suf.purs.gov.rs originalno izdao na GET-u stranice računa.
-    const incomingCookie = request.headers.get('Cookie');
-    if (incomingCookie) {
-      init.headers['Cookie'] = incomingCookie;
-    }
-
     if (request.method === 'POST') {
+      // Prosledi nazad kolačić koji je browser sačuvao od NAŠEG PRETHODNOG
+      // odgovora (GET stranice računa, par trenutaka ranije u ISTOM
+      // skeniranju) - to je isti kolačić koji je suf.purs.gov.rs originalno
+      // izdao. Kolačić se NAMERNO prosleđuje SAMO na POST, nikad na GET
+      // (vidi napomenu ispod) - inače stara, sat vremena "mrtva" sesija iz
+      // browsera blokira upravo sledeći GET koji treba da započne SASVIM
+      // NOVU sesiju za novo skeniranje.
+      const incomingCookie = request.headers.get('Cookie');
+      if (incomingCookie) {
+        init.headers['Cookie'] = incomingCookie;
+      }
+
       init.body = await request.text();
       init.headers['Content-Type'] =
         request.headers.get('Content-Type') || 'application/x-www-form-urlencoded; charset=UTF-8';
       init.headers['X-Requested-With'] = 'XMLHttpRequest';
     }
+    // NAMERNO: GET nikad ne prosleđuje ulazni Cookie header dalje ka
+    // suf.purs.gov.rs. Svaki novi sken treba da počne od SVEŽE sesije - ako
+    // bi GET nosio stari kolačić (npr. iz skeniranja pre par sati, koji je na
+    // strani Poreske uprave odavno istekao, jer smo ga mi prepisali BEZ
+    // isteka pa ga browser drži "zauvek"), server ga tretira kao nastavak
+    // mrtve sesije umesto da izda potpuno nov Set-Cookie, i POST
+    // /specifications posle toga redovno pada sa "success: false". Ovo je
+    // bio pravi uzrok povremenih grešaka nakon dužeg nekorišćenja aplikacije.
 
     let upstreamResponse;
     try {
