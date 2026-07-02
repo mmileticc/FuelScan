@@ -58,6 +58,10 @@ import { ToastService } from '../../core/services/toast.service';
         <p class="text-[10px] text-center text-slate-500">
           * Podaci sa vaših računa se bezbedno čuvaju u bazi i niko osim vas ih ne može videti.
         </p>
+        <p class="text-[10px] text-center text-slate-500">
+          Prijavom prihvatate našu
+          <a href="privacy.html" target="_blank" rel="noopener" class="text-fuel-400 underline">politiku privatnosti</a>.
+        </p>
       </div>
     </section>
   `,
