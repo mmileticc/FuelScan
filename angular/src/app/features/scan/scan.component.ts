@@ -10,7 +10,7 @@ import {
 import { Router } from '@angular/router';
 import { Html5Qrcode } from 'html5-qrcode';
 
-import { ParsedReceipt } from '../../core/models/receipt.model';
+import { ParsedReceipt, ReceiptErrorKind, ReceiptScanError } from '../../core/models/receipt.model';
 import { ReceiptService } from '../../core/services/receipt.service';
 import { ToastService } from '../../core/services/toast.service';
 
@@ -116,12 +116,41 @@ interface ScanStatus {
       }
 
       @if (resultState() === 'error') {
-        <div class="mx-4 mb-4 bg-surface-card border border-surface-border rounded-2xl p-5 text-center space-y-3">
-          <p class="text-red-400 font-semibold">Greška pri obradi</p>
+        <div
+          class="mx-4 mb-4 border rounded-2xl p-5 text-center space-y-3"
+          [class]="isRetryableError() ? 'bg-amber-500/10 border-amber-500/30' : 'bg-surface-card border-surface-border'"
+        >
+          <p class="font-semibold" [class]="isRetryableError() ? 'text-amber-400' : 'text-red-400'">
+            {{ errorTitle() }}
+          </p>
           <p class="text-slate-400 text-sm">{{ errorMessage() }}</p>
-          <button type="button" (click)="resetScan()" class="w-full bg-slate-700 hover:bg-slate-600 font-semibold py-2.5 rounded-xl transition-colors">
-            Pokušaj ponovo
-          </button>
+
+          @if (isRetryableError()) {
+            <div class="flex gap-3">
+              <button
+                type="button"
+                (click)="resetScan()"
+                class="flex-1 bg-slate-700 hover:bg-slate-600 font-semibold py-2.5 rounded-xl transition-colors text-sm"
+              >
+                Skeniraj drugi račun
+              </button>
+              <button
+                type="button"
+                (click)="retryLastScan()"
+                class="flex-1 bg-fuel-600 hover:bg-fuel-500 font-semibold py-2.5 rounded-xl transition-colors text-sm"
+              >
+                Pokušaj ponovo
+              </button>
+            </div>
+          } @else {
+            <button
+              type="button"
+              (click)="resetScan()"
+              class="w-full bg-slate-700 hover:bg-slate-600 font-semibold py-2.5 rounded-xl transition-colors"
+            >
+              Skeniraj ponovo
+            </button>
+          }
         </div>
       }
 
@@ -187,7 +216,11 @@ export class ScanComponent implements OnInit, OnDestroy {
   readonly resultState = signal<'idle' | 'loading' | 'success' | 'error'>('idle');
   readonly receipt = signal<ParsedReceipt | null>(null);
   readonly errorMessage = signal<string | null>(null);
+  readonly errorKind = signal<ReceiptErrorKind>('network');
   readonly isSaving = signal(false);
+
+  /** Poslednji dekodovan URL sa QR koda - omogućava retry BEZ ponovnog skeniranja. */
+  private readonly lastScannedUrl = signal<string | null>(null);
 
   /**
    * Laserska animacija preko kamere se pali SAMO dok je nešto zaista aktivno
@@ -292,6 +325,7 @@ export class ScanComponent implements OnInit, OnDestroy {
     this.resultState.set('idle');
     this.receipt.set(null);
     this.errorMessage.set(null);
+    this.lastScannedUrl.set(null);
     this.imagePreviewUrl.set(null);
     this.scanStatus.set({ message: 'Spreman za skeniranje', type: 'idle' });
     void this.startCamera();
@@ -330,29 +364,82 @@ export class ScanComponent implements OnInit, OnDestroy {
     } catch (err) {
       this.resultState.set('idle');
       this.imagePreviewUrl.set(null);
+      // 'warning', ne 'error' - ovo je često i bezazleno (loše osvetljenje,
+      // zamućena slika), ne treba da deluje kao ozbiljan kvar.
       this.scanStatus.set({
         message: err instanceof Error ? err.message : 'Nije pronađen QR. Pokušajte ponovo.',
-        type: 'error',
+        type: 'warning',
       });
     }
   }
 
   private handleDecodedText(decodedText: string): void {
+    this.lastScannedUrl.set(decodedText);
     this.resultState.set('loading');
+    this.scanStatus.set({ message: 'Analiziram račun...', type: 'loading' });
 
-    this.receiptService.scanReceipt$(decodedText).subscribe({
-      next: (parsedReceipt) => {
-        this.receipt.set(parsedReceipt);
-        this.resultState.set('success');
-        this.scanStatus.set({ message: 'Račun pronađen - proverite podatke', type: 'success' });
-      },
-      error: (err: Error) => {
-        this.resultState.set('error');
-        this.errorMessage.set(err.message || 'Nepoznata greška.');
-        this.scanStatus.set({ message: 'Greška pri obradi.', type: 'error' });
-        this.toast.show(err.message || 'Greška pri obradi.', 'error');
-      },
-    });
+    this.receiptService
+      .scanReceipt$(decodedText, (attempt, maxAttempts) => {
+        // Korisnik vidi da se nešto dešava umesto da gleda u tih spiner i
+        // posumnja da je aplikacija zaglavljena.
+        this.scanStatus.set({
+          message: `Poreska uprava malo sporije odgovara - pokušavam ponovo (${attempt}/${maxAttempts})...`,
+          type: 'loading',
+        });
+      })
+      .subscribe({
+        next: (parsedReceipt) => {
+          this.receipt.set(parsedReceipt);
+          this.resultState.set('success');
+          this.scanStatus.set({ message: 'Račun pronađen - proverite podatke', type: 'success' });
+        },
+        error: (err: unknown) => {
+          const scanError = err instanceof ReceiptScanError ? err : null;
+          const kind = scanError?.kind ?? 'network';
+
+          this.resultState.set('error');
+          this.errorKind.set(kind);
+          this.errorMessage.set(this.friendlyErrorMessage(kind));
+          this.scanStatus.set({ message: 'Nije uspelo ovog puta.', type: 'warning' });
+        },
+      });
+  }
+
+  /**
+   * Ljudski, smiren opis greške po kategoriji - namerno bez sirovih HTTP/tehničkih
+   * poruka za slučajeve koji nisu korisnikova krivica (skoro uvek se rešavaju
+   * samim retry-jem).
+   */
+  private friendlyErrorMessage(kind: ReceiptErrorKind): string {
+    switch (kind) {
+      case 'invalid-url':
+        return 'Ovo ne izgleda kao QR kod sa fiskalnog računa za gorivo. Proverite da li ste skenirali kod sa dna računa.';
+      case 'parse-failed':
+      case 'tax-authority-empty':
+        return 'Poreska uprava ponekad malo sporije odgovori na prvi upit za novi račun. Sačekajte par sekundi i pokušajte ponovo - obično odmah uspe.';
+      case 'network':
+      default:
+        return 'Trenutno ne možemo da se povežemo sa Poreskom upravom. Proverite internet konekciju i pokušajte ponovo.';
+    }
+  }
+
+  /** `true` za greške kod kojih retry ima realnog smisla (skoro sve osim pogrešnog QR-a). */
+  isRetryableError(): boolean {
+    return this.errorKind() !== 'invalid-url';
+  }
+
+  errorTitle(): string {
+    return this.errorKind() === 'invalid-url' ? 'Ovo nije račun za gorivo' : 'Nije uspelo ovog puta';
+  }
+
+  /** Retry BEZ ponovnog skeniranja QR-a - koristi već dekodovan URL. */
+  retryLastScan(): void {
+    const url = this.lastScannedUrl();
+    if (!url) {
+      this.resetScan();
+      return;
+    }
+    this.handleDecodedText(url);
   }
 
   /** Isti trenutak kao stari `btn-save-result` handler - upis se dešava TEK ovde. */

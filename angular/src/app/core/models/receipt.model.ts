@@ -110,3 +110,26 @@ export interface FuelReceiptRecord extends FuelReceiptRow {
   id: string;
   created_at?: string;
 }
+
+/**
+ * Kategorija greške pri skeniranju - koristi se u UI-ju da se odluči ton i
+ * ponašanje (da li retry ima smisla, koja boja/poruka):
+ *   - `invalid-url` - skeniran kod uopšte ne vodi na suf.purs.gov.rs (nema smisla
+ *     ponavljati isti pokušaj, korisnik mora da skenira nešto drugo).
+ *   - `parse-failed` - stranica računa se učitala, ali token/invoiceNumber nisu
+ *      pronađeni (obično prolazna stvar sa strane Poreske uprave).
+ *   - `tax-authority-empty` - POST /specifications je prošao, ali server nije
+ *      vratio stavke (najčešći slučaj - "hladan" prvi pristup tom računu).
+ *   - `network` - CORS proxy / mreža / bilo šta neočekivano.
+ */
+export type ReceiptErrorKind = 'invalid-url' | 'parse-failed' | 'tax-authority-empty' | 'network';
+
+export class ReceiptScanError extends Error {
+  constructor(
+    message: string,
+    readonly kind: ReceiptErrorKind,
+  ) {
+    super(message);
+    this.name = 'ReceiptScanError';
+  }
+}

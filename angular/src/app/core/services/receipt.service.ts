@@ -10,6 +10,7 @@ import {
   ParsedReceipt,
   RECEIPT_META_SELECTORS,
   ReceiptMetadata,
+  ReceiptScanError,
   ReceiptTokenData,
   SpecificationsApiResponse,
 } from '../models/receipt.model';
@@ -59,7 +60,7 @@ export class ReceiptService {
    */
   scanReceipt$(receiptUrl: string, onRetryAttempt?: (attempt: number, maxAttempts: number) => void): Observable<ParsedReceipt> {
     if (!receiptUrl || !receiptUrl.includes(SUF_ALLOWED_HOST)) {
-      return throwError(() => new Error(`Nevažeći URL računa: ${receiptUrl}`));
+      return throwError(() => new ReceiptScanError(`Nevažeći URL računa: ${receiptUrl}`, 'invalid-url'));
     }
 
     const maxRetries = 2;
@@ -72,11 +73,15 @@ export class ReceiptService {
     // sa potpuno svežim GET-om (pa samim tim i svežim kolačićem/tokenom).
     return this.fetchReceiptHtml$(receiptUrl).pipe(
       map((html) => this.parseTokenAndMetadata(html)),
-      // Kratka pauza pre POST /specifications: sesijski kolačić koji je proxy
-      // upravo prepisao ume da "legne" na suf.purs.gov.rs strani sa malim
-      // kašnjenjem - POST odmah nakon GET-a povremeno naleti na trenutak kad
-      // server još ne prepoznaje sesiju kao validnu, pa vrati praznu specifikaciju.
-      delay(400),
+      // Pauza pre POST /specifications - dva razloga se ovde preklapaju:
+      // 1) sesijski kolačić koji je proxy upravo prepisao ume da "legne" na
+      //    suf.purs.gov.rs strani sa malim kašnjenjem;
+      // 2) izgleda da server sam "hladno" generiše/računa specifikaciju pri
+      //    PRVOM pristupu baš tom računu (drugi POST istog računa odmah zatim
+      //    tipično vrati odgovor trenutno) - 400ms je bilo premalo za taj
+      //    slučaj, pa je pauza produžena da da serveru više vazduha pre nego
+      //    što uopšte probamo POST.
+      delay(1200),
       switchMap(({ tokenData, metadata }) =>
         this.fetchSpecifications$(tokenData).pipe(
           map((specs) => this.buildParsedReceipt(metadata, specs, receiptUrl)),
@@ -95,7 +100,16 @@ export class ReceiptService {
           return timer(1500 * retryCount);
         },
       }),
-      catchError((err) => throwError(() => (err instanceof Error ? err : new Error(String(err))))),
+      // Sve što stigne dovde, a NIJE već kategorisan ReceiptScanError (npr. pravi
+      // mrežni/CORS/proxy pad), tretira se kao 'network' - UI onda zna da
+      // ponudi smiren "proveri konekciju" ton umesto sirove HTTP poruke.
+      catchError((err) => {
+        if (err instanceof ReceiptScanError) {
+          return throwError(() => err);
+        }
+        const message = err instanceof Error ? err.message : String(err);
+        return throwError(() => new ReceiptScanError(message, 'network'));
+      }),
     );
   }
 
@@ -146,7 +160,7 @@ export class ReceiptService {
     const token = tokenMatch?.[1];
 
     if (!invoiceNumber || !token) {
-      throw new Error('Nije moguće izvući token/invoiceNumber sa stranice računa.');
+      throw new ReceiptScanError('Nije moguće izvući token/invoiceNumber sa stranice računa.', 'parse-failed');
     }
 
     const getById = (id: string): string | null => {
@@ -203,7 +217,7 @@ export class ReceiptService {
     receiptUrl: string,
   ): ParsedReceipt {
     if (!specs.success || !specs.items) {
-      throw new Error(specs.message || 'Poreska uprava nije vratila stavke računa.');
+      throw new ReceiptScanError(specs.message || 'Poreska uprava nije vratila stavke računa.', 'tax-authority-empty');
     }
 
     let fuelType: string | null = null;
