@@ -1,21 +1,30 @@
 name: Deploy Angular app to GitHub Pages
 
+# NAPOMENA (jul 2026): Ranije se ovde koristio actions/upload-pages-artifact +
+# actions/deploy-pages (novi GitHub Pages Deployments API). Taj API je u
+# ovom periodu nepouzdan - deployment ume da ostane zaglavljen u
+# "deployment_queued" stanju i sam sebe otkaže posle 10 minuta, nezavisno od
+# ičega u ovom repou (poznat, prijavljen GitHub infra problem, pogodio je
+# mnogo repoa istovremeno). Zato je tok vraćen na stariji, mnogo stabilniji
+# pristup: build ovde u Action-u, pa direktan push gotovog `dist` foldera na
+# `gh-pages` granu (peaceiris/actions-gh-pages). Pages Source u repo
+# podešavanjima treba da bude "Deploy from a branch" -> grana `gh-pages`,
+# folder `/ (root)`.
+
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -39,21 +48,11 @@ jobs:
         working-directory: angular
         run: npx ng build --configuration production --base-href /FuelScan/
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Deploy to gh-pages branch
+        uses: peaceiris/actions-gh-pages@v3
         with:
-          path: angular/dist/frontend/browser
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: angular/dist/frontend/browser
+          # peaceiris/actions-gh-pages sam doda .nojekyll fajl u gh-pages granu,
+          # pa GitHub-ov Jekyll build ne dira Angular-ove fajlove (npr. one koji
+          # počinju sa "_" u imenu chunk-a).
