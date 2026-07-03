@@ -1,6 +1,6 @@
 {
   "configVersion": 1,
-  "timestamp": 1783024181443,
+  "timestamp": 1783115249470,
   "index": "/FuelScan/index.html",
   "assetGroups": [
     {
@@ -24,7 +24,7 @@
         "/FuelScan/chunk-ZD4FRTWA.js",
         "/FuelScan/favicon.ico",
         "/FuelScan/index.html",
-        "/FuelScan/main-NYTJB6LA.js",
+        "/FuelScan/main-7SPXWUV7.js",
         "/FuelScan/manifest.webmanifest",
         "/FuelScan/polyfills-5CFQRCPP.js",
         "/FuelScan/styles-6ZK3MVRR.css"
@@ -89,8 +89,8 @@
     "/FuelScan/icons/icon-512x512.png": "cd59450d45e04de038a5c4e06299d8b533ce4ce4",
     "/FuelScan/icons/icon-72x72.png": "e66c265b8da80bdf1107c8e0102502f56d834bc4",
     "/FuelScan/icons/icon-96x96.png": "d36f6e3f0175fe701e53bd5bfbb407753adebf85",
-    "/FuelScan/index.html": "2296ed4442adcf69019097a8eb63cf9140315083",
-    "/FuelScan/main-NYTJB6LA.js": "2037ed0d0c76204c5f2b2104727657b08751099f",
+    "/FuelScan/index.html": "2a6650e97c655d9642f8aa6d0b4deae234cf92a7",
+    "/FuelScan/main-7SPXWUV7.js": "41cf59b284e8f5c829f03f2a19d209c3ffbc17e4",
     "/FuelScan/manifest.webmanifest": "e0ce8ca2674ffb5aadc1ddd0eb519a0ed9a1ba9a",
     "/FuelScan/polyfills-5CFQRCPP.js": "f2241e9a25858f895ce299d15f6f22e849e2fd72",
     "/FuelScan/styles-6ZK3MVRR.css": "a700c3b55582d64a434661d194c4d57c8e5809a6"
