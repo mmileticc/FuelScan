@@ -15,7 +15,7 @@ import {
   SpecificationsApiResponse,
 } from '../models/receipt.model';
 import { supabaseClient } from '../supabase/supabase-client';
-import { cleanStationName, normalizeText, parseLocalReceiptDate, parseNumber } from '../utils/receipt-parsing.utils';
+import { cleanStationName, normalizeText, parseLocalReceiptDate, parseNumber, roundTo2 } from '../utils/receipt-parsing.utils';
 
 /**
  * Novi tok parsiranja fiskalnog računa (zamena za `old-backend` Playwright parser).
@@ -221,19 +221,48 @@ export class ReceiptService {
     }
 
     let fuelType: string | null = null;
-    let liters: number | null = null;
-    let pricePerL: number | null = null;
+    let fuelLiters = 0;
+    let fuelTotal = 0;
+    let fuelItemCount = 0;
+    let singleUnitPrice: number | null = null;
 
+    // NAPOMENA: pre je ovde bio `break` posle prve pronađene stavke goriva i
+    // `total` se uzimao iz `metadata.total` (ukupan iznos CELOG računa).
+    // Problem: ako račun ima gorivo + ostale stavke (grickalice, kafa...),
+    // `total` je uključivao i te stavke, dok su `liters`/`price_per_l` bili
+    // vezani samo za gorivo - total nije odgovarao liters * price_per_l.
+    // Sada se sabiraju SVE stavke koje matchuju FUEL_KEYWORDS (uobičajeno
+    // jedna, ali ne lomi se ako ih ima više), a total računa isključivo iz njih.
     for (const item of specs.items) {
       const nameUpper = item.name.toUpperCase();
       if (FUEL_KEYWORDS.some((keyword) => nameUpper.includes(keyword))) {
-        fuelType = item.name.trim();
-        liters = item.quantity;
-        pricePerL = item.unitPrice;
-        break;
+        if (fuelItemCount === 0) {
+          fuelType = item.name.trim();
+          singleUnitPrice = item.unitPrice;
+        }
+        fuelLiters += item.quantity;
+        fuelTotal += item.total;
+        fuelItemCount += 1;
       }
     }
 
+    const hasFuel = fuelItemCount > 0;
+    const liters = hasFuel ? fuelLiters : null;
+    // Ako je gorivo samo jedna stavka, nema potrebe da se cena po litru računa
+    // deljenjem (total / liters) - to samo unosi nepotrebne decimale zbog
+    // zaokruživanja na strani Poreske uprave. Uzima se direktno pročitan
+    // `unitPrice` te stavke. Deljenje (ponderisan prosek) se radi samo kad
+    // ima više fuel-stavki na istom računu.
+    const pricePerL = !hasFuel
+      ? null
+      : fuelItemCount === 1
+        ? singleUnitPrice
+        : fuelLiters > 0
+          ? fuelTotal / fuelLiters
+          : null;
+
+    // Zaokruživanje na 2 decimale - deljenje (fuelTotal / fuelLiters) ume da
+    // vrati broj sa mnogo decimala (npr. 189.9999999997), pa ide kroz roundTo2.
     return {
       status: 'success',
       station: metadata.station,
@@ -241,9 +270,10 @@ export class ReceiptService {
       city: metadata.city,
       municipality: metadata.municipality,
       fuel_type: fuelType,
-      liters,
-      price_per_l: pricePerL,
-      total: metadata.total,
+      liters: roundTo2(liters),
+      price_per_l: roundTo2(pricePerL),
+      // Total računa samo za gorivo (ne ceo račun) - vidi napomenu iznad.
+      total: roundTo2(hasFuel ? fuelTotal : metadata.total),
       date: metadata.date,
       invoice_number: metadata.invoiceNumber,
       raw_url: receiptUrl,

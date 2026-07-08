@@ -115,6 +115,17 @@ export function parseNumber(val: string | number | null | undefined): number | n
 }
 
 /**
+ * Zaokružuje broj na 2 decimale (standardno za novac/litre u UI-ju).
+ * Vraća `null` ako ulaz nije validan broj.
+ */
+export function roundTo2(val: number | null | undefined): number | null {
+  if (val === null || val === undefined || Number.isNaN(val)) {
+    return null;
+  }
+  return Math.round(val * 100) / 100;
+}
+
+/**
  * Ekvivalent `parseLocalReceiptDate` iz old-vanilla/js/dateUtil.js.
  * Pretvara "18.6.2026. 11:14:31" (SDC datum sa računa) u ISO-nalik string
  * "2026-06-18T11:14:31" pogodan za Date/Supabase.
