@@ -97,7 +97,7 @@ interface ScanStatus {
       <div class="h-24 flex items-center justify-center relative px-8 shrink-0">
         <button
           type="button"
-          [disabled]="!cameraActive() || resultState() === 'loading'"
+          [disabled]="!cameraActive() || resultState() === 'loading' || isCapturing()"
           (click)="capturePhoto()"
           class="btn-capture w-16 h-16 bg-white rounded-full border-4 border-slate-600 hover:scale-105 transition-transform disabled:opacity-40 disabled:hover:scale-100"
         ></button>
@@ -218,6 +218,20 @@ export class ScanComponent implements OnInit, OnDestroy {
   readonly errorMessage = signal<string | null>(null);
   readonly errorKind = signal<ReceiptErrorKind>('network');
   readonly isSaving = signal(false);
+  /** `true` dok traje burst snimanje na klik dugmeta (vidi `capturePhoto`) - blokira dupli tap. */
+  readonly isCapturing = signal(false);
+
+  /**
+   * Burst podešavanja za `capturePhoto()`. Jedan frejm iz `getUserMedia` live
+   * stream-a je fundamentalno manje pouzdan od jedne native still-photo
+   * fotografije (nema AF/AE lock ni stabilizaciju posvećenu tom kadru) - zato
+   * se posle klika ne uzima samo JEDAN frejm, nego se proba više njih zaredom
+   * dok jedan ne uspe da se dekoduje kao QR.
+   */
+  private readonly burstFrameCount = 6;
+  private readonly burstIntervalMs = 120;
+  /** Pauza PRE prvog frejma - sam dodir ekrana unese mikro-trešnju u ruci, ovo joj da vremena da se smiri. */
+  private readonly burstStartDelayMs = 300;
 
   /** Poslednji dekodovan URL sa QR koda - omogućava retry BEZ ponovnog skeniranja. */
   private readonly lastScannedUrl = signal<string | null>(null);
@@ -288,26 +302,87 @@ export class ScanComponent implements OnInit, OnDestroy {
     }
   }
 
-  capturePhoto(): void {
+  /**
+   * Umesto da uzme TAČNO JEDAN frejm u trenutku klika (kao ranije - previše
+   * osetljivo na tresenje ruke i autofocus koji baš tada "luta"), uzima kratki
+   * burst frejmova iz live kamere i probava dekodovanje na svakom dok jedan
+   * ne uspe. Svaki frejm i dalje ide u punoj `video.videoWidth`/`videoHeight`
+   * rezoluciji (ne CSS prikazanoj veličini kontejnera).
+   */
+  async capturePhoto(): Promise<void> {
     const video = this.videoRef?.nativeElement;
     if (!this.cameraStream || !video?.videoWidth) {
       this.scanStatus.set({ message: 'Kamera nije aktivna!', type: 'error' });
       return;
     }
+    if (this.isCapturing()) {
+      return;
+    }
 
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext('2d')?.drawImage(video, 0, 0, canvas.width, canvas.height);
+    this.isCapturing.set(true);
+    this.scanStatus.set({ message: 'Slikam - drži mirno...', type: 'loading' });
 
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        return;
+    // Mala pauza posle tapa - sam dodir ekrana unese mikro-trešnju, ovo joj
+    // da vremena da se smiri pre nego što uzmemo prvi frejm iz burst-a.
+    await this.delay(this.burstStartDelayMs);
+
+    for (let attempt = 0; attempt < this.burstFrameCount; attempt++) {
+      // Kamera je u međuvremenu ugašena (npr. korisnik je otišao sa ekrana ili kliknuo toggle) - prekini.
+      if (!this.cameraStream || !video.videoWidth) {
+        break;
       }
-      const file = new File([blob], 'snapshot.jpg', { type: 'image/jpeg' });
-      this.showImagePreview(file);
-      void this.processImage(file);
-    }, 'image/jpeg');
+
+      const file = await this.grabFrame(video);
+      if (!file) {
+        continue;
+      }
+
+      this.scanStatus.set({
+        message: `Tražim QR kod... (${attempt + 1}/${this.burstFrameCount})`,
+        type: 'loading',
+      });
+
+      try {
+        const decodedText = await this.scanQrFromBlob(file);
+        this.isCapturing.set(false);
+        this.showImagePreview(file);
+        this.stopCamera();
+        this.handleDecodedText(decodedText);
+        return;
+      } catch {
+        // Ovaj frejm nije dao QR - probaj sledeći frejm iz burst-a bez prekidanja.
+      }
+
+      if (attempt < this.burstFrameCount - 1) {
+        await this.delay(this.burstIntervalMs);
+      }
+    }
+
+    // Nijedan frejm iz burst-a nije dao QR kod - vrati se na live kameru
+    // (namerno NE prikazujemo poslednji neuspeli frejm kao "zaleđenu" sliku,
+    // korisnik odmah vidi živu kameru i može odmah ponovo da pokuša).
+    this.isCapturing.set(false);
+    this.scanStatus.set({
+      message: 'Nije pronađen QR kod. Pokušajte ponovo, malo bliže i sa boljim osvetljenjem.',
+      type: 'warning',
+    });
+  }
+
+  /** Uzima JEDAN frejm iz live videa u punoj (native) rezoluciji kamere, ne CSS prikazanoj veličini. */
+  private grabFrame(video: HTMLVideoElement): Promise<File | null> {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d')?.drawImage(video, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((blob) => {
+        resolve(blob ? new File([blob], 'snapshot.jpg', { type: 'image/jpeg' }) : null);
+      }, 'image/jpeg');
+    });
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   onFileSelected(event: Event): void {
