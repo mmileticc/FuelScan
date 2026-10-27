@@ -95,7 +95,7 @@ const DETECT_INTERVAL_MS = 120;
             <div class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 gap-3 px-6 text-center">
               <img src="assets/camera-off-icon.svg" alt="" class="w-10 h-10 opacity-60" />
               <p class="text-sm">Kamera je isključena</p>
-              <button type="button" (click)="startCamera()" class="text-xs bg-fuel-600 hover:bg-fuel-500 text-white px-4 py-2 rounded-lg">
+              <button type="button" (click)="toggleCamera()" class="text-xs bg-fuel-600 hover:bg-fuel-500 text-white px-4 py-2 rounded-lg">
                 Uključi kameru
               </button>
             </div>
@@ -275,6 +275,8 @@ export class ScanComponent implements AfterViewInit, OnDestroy {
   private frameCounter = 0;
   private lastAttempt = 0;
   private lastRejectedValue: string | null = null;
+  /** Korisnik je sam isključio kameru - ne pali je automatski po povratku iz pozadine. */
+  private userStoppedCamera = false;
   private readonly cropCanvas = document.createElement('canvas');
   private readonly onVisibilityChange = () => this.handleVisibilityChange();
 
@@ -331,12 +333,15 @@ export class ScanComponent implements AfterViewInit, OnDestroy {
     this.destroyed = true;
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
     this.stopCamera();
+    this.setPreview(null);
   }
 
   async toggleCamera(): Promise<void> {
     if (this.cameraStream) {
+      this.userStoppedCamera = true;
       this.stopCamera();
     } else {
+      this.userStoppedCamera = false;
       await this.startCamera();
     }
   }
@@ -345,7 +350,7 @@ export class ScanComponent implements AfterViewInit, OnDestroy {
     if (this.cameraStream || this.mode() !== 'camera') {
       return;
     }
-    this.imagePreviewUrl.set(null);
+    this.setPreview(null);
 
     if (!navigator.mediaDevices?.getUserMedia) {
       this.scanStatus.set({ message: 'Kamera nije dostupna - koristite "Fotografiši" ili galeriju.', type: 'warning' });
@@ -435,7 +440,7 @@ export class ScanComponent implements AfterViewInit, OnDestroy {
     this.errorMessage.set(null);
     this.lastScannedUrl = null;
     this.lastRejectedValue = null;
-    this.imagePreviewUrl.set(null);
+    this.setPreview(null);
     this.mode.set('camera');
     this.scanStatus.set({ message: 'Spreman za skeniranje', type: 'idle' });
     // Video element se ponovo pravi kad se vrati 'camera' mod - sačekaj render.
@@ -524,6 +529,19 @@ export class ScanComponent implements AfterViewInit, OnDestroy {
 
   // ---------------------------------------------------------------------------
 
+  /**
+   * Prikaz uslikanog kadra. Fotografija sa telefona (12MP) je `blob:` URL koji
+   * drži celu sliku u memoriji dok se eksplicitno ne oslobodi - inače bi svaki
+   * pokušaj trajno zauzimao desetine MB.
+   */
+  private setPreview(url: string | null): void {
+    const previous = this.imagePreviewUrl();
+    if (previous?.startsWith('blob:') && previous !== url) {
+      URL.revokeObjectURL(previous);
+    }
+    this.imagePreviewUrl.set(url);
+  }
+
   private async configureTrack(track: MediaStreamTrack | undefined): Promise<void> {
     if (!track) return;
     const caps = (track.getCapabilities?.() ?? {}) as ExtendedCapabilities;
@@ -598,7 +616,7 @@ export class ScanComponent implements AfterViewInit, OnDestroy {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     canvas.getContext('2d')?.drawImage(video, 0, 0);
-    this.imagePreviewUrl.set(canvas.toDataURL('image/jpeg', 0.7));
+    this.setPreview(canvas.toDataURL('image/jpeg', 0.7));
 
     this.stopCamera();
     this.handleDecodedText(value);
@@ -609,19 +627,19 @@ export class ScanComponent implements AfterViewInit, OnDestroy {
     // Aplikacija u pozadini - oslobodi kameru (baterija, privatnost); vrati je po povratku.
     if (document.hidden) {
       if (this.cameraStream) this.stopCamera();
-    } else if (this.mode() === 'camera' && this.resultState() === 'idle' && !this.imagePreviewUrl()) {
+    } else if (this.mode() === 'camera' && this.resultState() === 'idle' && !this.imagePreviewUrl() && !this.userStoppedCamera) {
       void this.startCamera();
     }
   }
 
   private async processImage(file: File): Promise<void> {
     this.stopCamera();
-    this.imagePreviewUrl.set(URL.createObjectURL(file));
+    this.setPreview(URL.createObjectURL(file));
     this.scanStatus.set({ message: 'Tražim QR kod na slici...', type: 'loading' });
 
     const value = await detectQrFromFile(file);
     if (!value) {
-      this.imagePreviewUrl.set(null);
+      this.setPreview(null);
       this.scanStatus.set({
         message: 'Na slici nije pronađen QR kod. Fotografišite ga bliže, oštro i pri dobrom svetlu.',
         type: 'warning',

@@ -78,7 +78,7 @@ type NumberField = 'liters' | 'price_per_l' | 'total';
 
       <label class="block">
         <span class="field-label">Datum i vreme *</span>
-        <input formControlName="date" type="datetime-local" class="field-input" />
+        <input formControlName="date" type="datetime-local" step="1" class="field-input" />
       </label>
 
       <div class="grid grid-cols-3 gap-2">
@@ -221,20 +221,20 @@ export class ReceiptFormComponent implements OnInit {
   }
 }
 
-/** ISO / SDC datum -> "YYYY-MM-DDTHH:mm" u lokalnom vremenu za `<input type="datetime-local">`. */
+/** ISO / SDC datum -> "YYYY-MM-DDTHH:mm:ss" u lokalnom vremenu za `<input type="datetime-local" step="1">`. */
 export function toDateTimeLocal(value: string | null): string {
   if (!value) return '';
   const iso = parseLocalReceiptDate(value);
   const date = iso ? new Date(iso) : null;
   if (!date || Number.isNaN(date.getTime())) return '';
   const pad = (n: number) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-/** "YYYY-MM-DDTHH:mm" (vreme u Srbiji) -> ISO sa zonom Europe/Belgrade. */
+/** "YYYY-MM-DDTHH:mm[:ss]" (vreme u Srbiji) -> ISO sa zonom Europe/Belgrade (sekunde se čuvaju). */
 export function fromDateTimeLocal(value: string): string | null {
-  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/);
   if (!match) return null;
-  const [, y, m, d, hh, mm] = match;
-  return `${y}-${m}-${d}T${hh}:${mm}:00${belgradeOffset(+y, +m, +d, +hh)}`;
+  const [, y, m, d, hh, mm, ss = '00'] = match;
+  return `${y}-${m}-${d}T${hh}:${mm}:${ss}${belgradeOffset(+y, +m, +d, +hh)}`;
 }

@@ -1,9 +1,22 @@
 import { Component, ElementRef, Injector, OnDestroy, OnInit, afterNextRender, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { Chart, ChartConfiguration, registerables } from 'chart.js';
+import {
+  BarController,
+  BarElement,
+  CategoryScale,
+  Chart,
+  ChartConfiguration,
+  Filler,
+  LineController,
+  LineElement,
+  LinearScale,
+  PointElement,
+  Tooltip,
+} from 'chart.js';
 
 import { ReceiptsStore } from '../../core/services/receipts-store.service';
+import { FuelCategory } from '../../core/utils/receipt-parsing.utils';
 import { StationNicknamesService } from '../../core/services/station-nicknames.service';
 import {
   StatsPeriod,
@@ -15,7 +28,8 @@ import {
   stationComparison,
 } from '../../core/utils/receipt-stats.utils';
 
-Chart.register(...registerables);
+// Samo ono što ekran koristi (linijski + stubičasti grafikon) - ne ceo Chart.js.
+Chart.register(LineController, LineElement, PointElement, BarController, BarElement, CategoryScale, LinearScale, Filler, Tooltip);
 
 const AXIS_TICKS = { color: '#94a3b8', font: { size: 10 } };
 const TOOLTIP = {
@@ -76,10 +90,18 @@ const TOOLTIP = {
         </div>
       </div>
 
+      @if (stats().categories.length > 1) {
+        <div class="flex flex-wrap gap-2 -mb-3">
+          @for (c of stats().categories; track c) {
+            <button type="button" class="chip" [class.chip-active]="stats().category === c" (click)="fuelCategory.set(c)">{{ c }}</button>
+          }
+        </div>
+      }
+
       <div class="grid grid-cols-2 gap-3">
         <div class="bg-surface-card border border-surface-border rounded-xl p-4 flex flex-col justify-between min-h-[100px]">
           <div>
-            <p class="text-[10px] text-emerald-400 uppercase tracking-wider font-semibold mb-1">Najjeftinije gorivo</p>
+            <p class="text-[10px] text-emerald-400 uppercase tracking-wider font-semibold mb-1">Najjeftinije{{ stats().category ? ' · ' + stats().category : '' }}</p>
             <p class="text-base font-bold leading-snug break-words">{{ stats().cheapest ? (nicknames.forReceipt(stats().cheapest!) ?? stats().cheapest!.station) : 'Nema podataka' }}</p>
           </div>
           <p class="text-sm font-semibold font-mono text-slate-300 mt-2">
@@ -88,7 +110,7 @@ const TOOLTIP = {
         </div>
         <div class="bg-surface-card border border-surface-border rounded-xl p-4 flex flex-col justify-between min-h-[100px]">
           <div>
-            <p class="text-[10px] text-red-400 uppercase tracking-wider font-semibold mb-1">Najskuplje gorivo</p>
+            <p class="text-[10px] text-red-400 uppercase tracking-wider font-semibold mb-1">Najskuplje{{ stats().category ? ' · ' + stats().category : '' }}</p>
             <p class="text-base font-bold leading-snug break-words">{{ stats().expensive ? (nicknames.forReceipt(stats().expensive!) ?? stats().expensive!.station) : 'Nema podataka' }}</p>
           </div>
           <p class="text-sm font-semibold font-mono text-slate-300 mt-2">
@@ -103,7 +125,7 @@ const TOOLTIP = {
       </div>
 
       <div class="bg-surface-card border border-surface-border rounded-2xl p-4 space-y-3">
-        <p class="stat-label">Trend cena kroz vreme (RSD/L)</p>
+        <p class="stat-label">Trend cena kroz vreme (RSD/L){{ stats().category ? ' · ' + stats().category : '' }}</p>
         <div class="relative w-full h-56"><canvas #priceCanvas></canvas></div>
       </div>
 
@@ -156,9 +178,11 @@ export class StatisticsComponent implements OnInit, OnDestroy {
   ];
 
   readonly period = signal<StatsPeriod>('year');
+  /** Izabrana vrsta goriva za najjeftinije/najskuplje i trend; `null` = najčešća u periodu. */
+  readonly fuelCategory = signal<FuelCategory | null>(null);
   private readonly inPeriod = computed(() => filterByPeriod(this.store.receipts(), this.period()));
 
-  readonly stats = computed(() => computeStatistics(this.store.receipts(), this.period()));
+  readonly stats = computed(() => computeStatistics(this.store.receipts(), this.period(), new Date(), this.fuelCategory()));
   readonly consumption = computed(() => computeConsumption(this.inPeriod()));
   readonly consumptionKm = computed(() => this.consumption().points.reduce((s, p) => s + p.km, 0));
   readonly categories = computed(() => avgPriceByCategory(this.inPeriod()));

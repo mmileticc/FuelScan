@@ -10,6 +10,9 @@ import { ToastService } from './toast.service';
  * Jedan, zajednički keš računa za dashboard, istoriju i statistiku - umesto da
  * svaki ekran posebno vuče celu tabelu iz Supabase-a pri svakom ulasku.
  */
+/** Brisanja koja čekaju istek roka za "Poništi" - preživljavaju i zatvaranje aplikacije. */
+const PENDING_DELETES_KEY = 'fuelscan.pendingDeletes';
+
 @Injectable({ providedIn: 'root' })
 export class ReceiptsStore {
   private readonly api = inject(FuelReceiptsService);
@@ -20,6 +23,13 @@ export class ReceiptsStore {
   private loaded = false;
   /** Lokalne izmene napravljene dok `load()` čeka odgovor - primenjuju se i na pristigle podatke. */
   private pendingOps: Array<(list: FuelReceiptRecord[]) => FuelReceiptRecord[]> = [];
+  private readonly scheduledDeletes = new Map<string, { timer: ReturnType<typeof setTimeout>; record: FuelReceiptRecord }>();
+
+  constructor() {
+    // Aplikacija se zatvara usred roka za "Poništi" -> pokušaj brisanje odmah;
+    // ako ni to ne stigne, id ostaje zapamćen i briše se pri sledećem učitavanju.
+    window.addEventListener('pagehide', () => this.flushScheduledDeletes());
+  }
 
   /** Sortirano po datumu, najnoviji prvi. */
   readonly receipts = this._receipts.asReadonly();
@@ -38,7 +48,9 @@ export class ReceiptsStore {
       next: (data) => {
         const ops = this.pendingOps;
         this.pendingOps = [];
-        this._receipts.set(ops.reduce((list, op) => op(list), data));
+        const leftover = this.leftoverDeletes();
+        this._receipts.set(ops.reduce((list, op) => op(list), data).filter((r) => !leftover.includes(r.id)));
+        this.finishLeftoverDeletes(leftover);
         this.loaded = true;
         this._loading.set(false);
       },
@@ -69,7 +81,77 @@ export class ReceiptsStore {
     return this.api.deleteReceipt$(id).pipe(tap(() => this.removeLocal(id)));
   }
 
-  /** Lokalno sklanjanje bez poziva baze (za "Poništi" tok brisanja). */
+  /**
+   * Brisanje sa mogućnošću poništavanja: zapis odmah nestaje iz prikaza, a iz
+   * baze se briše tek posle `delayMs`. Vraća funkciju za poništavanje.
+   */
+  scheduleDelete(record: FuelReceiptRecord, delayMs: number): () => void {
+    this.removeLocal(record.id);
+    this.persistDeletes([...this.leftoverDeletes(), record.id]);
+    const timer = setTimeout(() => this.commitDelete(record.id), delayMs);
+    this.scheduledDeletes.set(record.id, { timer, record });
+
+    return () => {
+      const pending = this.scheduledDeletes.get(record.id);
+      if (!pending) return;
+      clearTimeout(pending.timer);
+      this.scheduledDeletes.delete(record.id);
+      this.forgetDelete(record.id);
+      this.upsertLocal(pending.record);
+    };
+  }
+
+  private flushScheduledDeletes(): void {
+    for (const [id, { timer }] of this.scheduledDeletes) {
+      clearTimeout(timer);
+      this.commitDelete(id);
+    }
+  }
+
+  private commitDelete(id: string): void {
+    const record = this.scheduledDeletes.get(id)?.record;
+    this.scheduledDeletes.delete(id);
+    this.api.deleteReceipt$(id).subscribe({
+      next: () => this.forgetDelete(id),
+      error: (err: unknown) => {
+        this.forgetDelete(id);
+        if (record) this.upsertLocal(record);
+        this.toast.show(err instanceof Error ? `Greška pri brisanju: ${err.message}` : 'Greška pri brisanju.', 'error');
+      },
+    });
+  }
+
+  /** Brisanja zapamćena iz prethodnog pokretanja (aplikacija zatvorena pre isteka roka). */
+  private finishLeftoverDeletes(ids: string[]): void {
+    for (const id of ids) {
+      if (!this.scheduledDeletes.has(id)) {
+        this.api.deleteReceipt$(id).subscribe({ next: () => this.forgetDelete(id), error: () => undefined });
+      }
+    }
+  }
+
+  private leftoverDeletes(): string[] {
+    try {
+      const parsed: unknown = JSON.parse(localStorage.getItem(PENDING_DELETES_KEY) ?? '[]');
+      return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private persistDeletes(ids: string[]): void {
+    try {
+      localStorage.setItem(PENDING_DELETES_KEY, JSON.stringify([...new Set(ids)]));
+    } catch {
+      // Bez storage-a brisanje i dalje radi, samo ne preživljava zatvaranje aplikacije.
+    }
+  }
+
+  private forgetDelete(id: string): void {
+    this.persistDeletes(this.leftoverDeletes().filter((v) => v !== id));
+  }
+
+  /** Lokalno sklanjanje bez poziva baze. */
   removeLocal(id: string): void {
     this.mutate((list) => list.filter((r) => r.id !== id));
   }

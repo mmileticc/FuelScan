@@ -1,8 +1,12 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
+
+import { AuthService } from './auth.service';
 
 export interface QueuedScan {
   url: string;
   scannedAt: string;
+  /** Ko je skenirao - drugi korisnik na istom uređaju ne vidi tuđe račune na čekanju. */
+  userId?: string;
 }
 
 const STORAGE_KEY = 'fuelscan.offlineQueue';
@@ -14,7 +18,15 @@ const STORAGE_KEY = 'fuelscan.offlineQueue';
  */
 @Injectable({ providedIn: 'root' })
 export class OfflineQueueService {
-  readonly items = signal<QueuedScan[]>(this.read());
+  private readonly auth = inject(AuthService);
+  /** Ceo red na uređaju (svi korisnici). */
+  private readonly all = signal<QueuedScan[]>(this.read());
+
+  /** Red trenutno prijavljenog korisnika (stavke bez `userId` su iz starije verzije i vidljive su svima). */
+  readonly items = computed(() => {
+    const userId = this.auth.currentUser()?.id;
+    return this.all().filter((i) => !i.userId || i.userId === userId);
+  });
   readonly online = signal(typeof navigator === 'undefined' ? true : navigator.onLine);
 
   constructor() {
@@ -29,13 +41,15 @@ export class OfflineQueueService {
     if (this.items().some((i) => i.url === url)) {
       return false;
     }
-    this.items.update((list) => [...list, { url, scannedAt: new Date().toISOString() }]);
+    const userId = this.auth.currentUser()?.id;
+    this.all.update((list) => [...list, { url, scannedAt: new Date().toISOString(), userId }]);
     this.write();
     return true;
   }
 
   remove(url: string): void {
-    this.items.update((list) => list.filter((i) => i.url !== url));
+    const userId = this.auth.currentUser()?.id;
+    this.all.update((list) => list.filter((i) => i.url !== url || (!!i.userId && i.userId !== userId)));
     this.write();
   }
 
@@ -55,7 +69,7 @@ export class OfflineQueueService {
 
   private write(): void {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.items()));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.all()));
     } catch {
       // Storage nedostupan (privatni prozor i sl.) - red živi samo u memoriji.
     }

@@ -62,6 +62,10 @@ export type StatsPeriod = 'all' | 'year' | 'month';
 export interface StatisticsResult {
   periodTotal: number;
   periodLiters: number;
+  /** Vrsta goriva za koju važe najjeftinije/najskuplje i trend cena. */
+  category: FuelCategory | null;
+  /** Vrste goriva koje se pojavljuju u periodu, najčešća prva. */
+  categories: FuelCategory[];
   cheapest: FuelReceiptRecord | null;
   expensive: FuelReceiptRecord | null;
   chartData: FuelReceiptRecord[];
@@ -75,10 +79,22 @@ export function computeStatistics(
   receipts: FuelReceiptRecord[],
   period: StatsPeriod = 'all',
   now = new Date(),
+  preferredCategory: FuelCategory | null = null,
 ): StatisticsResult {
   const filtered = filterByPeriod(receipts, period, now);
 
-  const validForStats = filtered.filter((r) => Number(r.price_per_l) > 0 && r.station);
+  // Cene različitih goriva se ne porede međusobno (TNG bi uvek bio "najjeftiniji"):
+  // najjeftinije/najskuplje i trend važe za jednu vrstu - izabranu ili najčešću.
+  const priced = filtered
+    .filter((r) => Number(r.price_per_l) > 0 && r.station)
+    .map((r) => ({ r, category: detectFuel(r.fuel_type).category }));
+  const counts = new Map<FuelCategory, number>();
+  for (const { category } of priced) {
+    if (category) counts.set(category, (counts.get(category) ?? 0) + 1);
+  }
+  const categories = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([c]) => c);
+  const category = preferredCategory && counts.has(preferredCategory) ? preferredCategory : (categories[0] ?? null);
+  const validForStats = priced.filter((p) => p.category === category).map((p) => p.r);
 
   const periodTotal = filtered.reduce((sum, r) => sum + (Number(r.total) || 0), 0);
   const periodLiters = filtered.reduce((sum, r) => sum + (Number(r.liters) || 0), 0);
@@ -93,7 +109,7 @@ export function computeStatistics(
 
   const chartData = [...validForStats].sort((a, b) => new Date(a.date as string).getTime() - new Date(b.date as string).getTime());
 
-  return { periodTotal, periodLiters, cheapest, expensive, chartData };
+  return { periodTotal, periodLiters, category, categories, cheapest, expensive, chartData };
 }
 
 // ---------------------------------------------------------------------------

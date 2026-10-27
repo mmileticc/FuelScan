@@ -125,4 +125,20 @@ describe('receipt-stats.utils', () => {
     expect(result[0].count).toBe(2);
     expect(result[0].avgPrice).toBe(200);
   });
+
+  it('computeStatistics ne meša vrste goriva: najjeftinije važi za najčešću (ili izabranu)', () => {
+    const data = [
+      receipt({ fuel_type: 'EVRO DIZEL', price_per_l: 205, station: 'D1', date: '2026-10-20T10:00:00+02:00' }),
+      receipt({ fuel_type: 'EVRO DIZEL', price_per_l: 199, station: 'D2', date: '2026-10-21T10:00:00+02:00' }),
+      receipt({ fuel_type: 'TNG', price_per_l: 95, station: 'T1', date: '2026-10-22T10:00:00+02:00' }),
+    ];
+    const byDefault = computeStatistics(data, 'month', now);
+    expect(byDefault.category).toBe('Dizel');
+    expect(byDefault.categories).toEqual(['Dizel', 'TNG']);
+    expect(byDefault.cheapest?.station).toBe('D2');
+    expect(byDefault.chartData.length).toBe(2);
+
+    const tng = computeStatistics(data, 'month', now, 'TNG');
+    expect(tng.cheapest?.station).toBe('T1');
+  });
 });

@@ -1,9 +1,8 @@
-import { Component, DestroyRef, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { FuelReceiptRecord } from '../../core/models/receipt.model';
-import { FuelReceiptsService } from '../../core/services/fuel-receipts.service';
 import { ReceiptsStore } from '../../core/services/receipts-store.service';
 import { StationNicknamesService } from '../../core/services/station-nicknames.service';
 import { ToastService } from '../../core/services/toast.service';
@@ -140,10 +139,9 @@ const UNDO_MS = 5000;
     }
   `,
 })
-export class HistoryComponent implements OnInit, OnDestroy {
+export class HistoryComponent implements OnInit {
   protected readonly store = inject(ReceiptsStore);
   protected readonly nicknames = inject(StationNicknamesService);
-  private readonly api = inject(FuelReceiptsService);
   private readonly toast = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -169,8 +167,6 @@ export class HistoryComponent implements OnInit, OnDestroy {
   readonly editing = signal<FuelReceiptRecord | null>(null);
   readonly saving = signal(false);
 
-  /** Brisanja koja čekaju istek roka za "Poništi". */
-  private readonly pendingDeletes = new Map<string, { timer: ReturnType<typeof setTimeout>; record: FuelReceiptRecord }>();
 
   readonly consumption = computed(() => computeConsumption(this.store.receipts()).byId);
 
@@ -197,33 +193,10 @@ export class HistoryComponent implements OnInit, OnDestroy {
     return { ...r, nickname: this.nicknames.forReceipt(r) };
   }
 
-  ngOnDestroy(): void {
-    // Napuštanje ekrana = korisnik nije poništio -> izvrši brisanja odmah.
-    for (const { timer, record } of this.pendingDeletes.values()) {
-      clearTimeout(timer);
-      this.commitDelete(record);
-    }
-    this.pendingDeletes.clear();
-  }
-
   deleteWithUndo(record: FuelReceiptRecord): void {
-    this.store.removeLocal(record.id);
-    const timer = setTimeout(() => {
-      this.pendingDeletes.delete(record.id);
-      this.commitDelete(record);
-    }, UNDO_MS);
-    this.pendingDeletes.set(record.id, { timer, record });
-
-    this.toast.show('Zapis obrisan.', 'info', UNDO_MS, {
-      label: 'Poništi',
-      handler: () => {
-        const pending = this.pendingDeletes.get(record.id);
-        if (!pending) return;
-        clearTimeout(pending.timer);
-        this.pendingDeletes.delete(record.id);
-        this.store.upsertLocal(pending.record);
-      },
-    });
+    // Rok i stvarno brisanje vodi store (root servis) - ne prekida se napuštanjem ekrana.
+    const undo = this.store.scheduleDelete(record, UNDO_MS);
+    this.toast.show('Zapis obrisan.', 'info', UNDO_MS, { label: 'Poništi', handler: undo });
   }
 
   saveEdit(record: FuelReceiptRecord, value: ReceiptFormValue): void {
@@ -268,14 +241,5 @@ export class HistoryComponent implements OnInit, OnDestroy {
     a.download = `fuelscan-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-
-  private commitDelete(record: FuelReceiptRecord): void {
-    this.api.deleteReceipt$(record.id).subscribe({
-      error: (err: unknown) => {
-        this.store.upsertLocal(record);
-        this.toast.show(err instanceof Error ? `Greška pri brisanju: ${err.message}` : 'Greška pri brisanju.', 'error');
-      },
-    });
   }
 }

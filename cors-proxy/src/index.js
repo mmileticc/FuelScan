@@ -138,9 +138,12 @@ export default {
     }
 
     // Jedno skeniranje = GET + POST (+ do 2 ponovna pokušaja aplikacije) - limit je izdašan za normalnu upotrebu.
+    // Ključ je IP + User-Agent: mobilni operateri (CGNAT) dele jednu javnu IP adresu
+    // na mnogo korisnika, pa bi limit samo po IP-u kažnjavao nepovezane ljude.
     if (env?.SCAN_LIMITER) {
       const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-      const { success } = await env.SCAN_LIMITER.limit({ key: ip });
+      const ua = request.headers.get('User-Agent') || '';
+      const { success } = await env.SCAN_LIMITER.limit({ key: `${ip}|${ua.slice(0, 200)}` });
       if (!success) {
         return jsonError(429, 'Previše zahteva. Sačekajte minut pa pokušajte ponovo.', origin);
       }

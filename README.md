@@ -102,7 +102,7 @@ Zaštita od zloupotrebe:
 
 - cilj je isključivo `suf.purs.gov.rs` (domain allowlist),
 - pozivi su dozvoljeni samo sa origin-a aplikacije (`ALLOWED_ORIGINS` u `src/index.js` - GitHub Pages + localhost); ako se aplikacija preseli na drugi domen, dodaj ga tu,
-- rate limit 30 zahteva / 60s po IP adresi (binding `SCAN_LIMITER` u `wrangler.jsonc`) - preko toga Worker vraća 429.
+- rate limit 30 zahteva / 60s po IP adresi + User-Agent-u (binding `SCAN_LIMITER` u `wrangler.jsonc`; User-Agent zato što mobilni operateri dele jednu IP adresu na mnogo korisnika) - preko toga Worker vraća 429.
 
 ## Deploy na GitHub Pages
 
