@@ -1,7 +1,8 @@
 {
-  "name": "FuelScan - Fuel expense Tracker",
+  "name": "FuelScan - praćenje troškova goriva",
   "short_name": "FuelScan",
-  "description": "Scan fuel receipts and track your expenses automatically.",
+  "description": "Skenirajte QR kod sa računa za gorivo i automatski pratite troškove, cene i potrošnju.",
+  "lang": "sr",
   "display": "standalone",
   "scope": "./",
   "start_url": "./",
@@ -55,7 +56,13 @@
       "src": "icons/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "maskable any"
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
