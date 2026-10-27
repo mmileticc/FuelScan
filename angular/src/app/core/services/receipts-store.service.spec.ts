@@ -1,7 +1,10 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { Subject, of } from 'rxjs';
+import { signal } from '@angular/core';
+import { Observable, Subject, of, throwError } from 'rxjs';
 
 import { FuelReceiptRecord } from '../models/receipt.model';
+import { cacheDelete, cacheGet, cacheSet, userCacheKey } from '../storage/local-cache';
+import { AuthService } from './auth.service';
 import { FuelReceiptsService } from './fuel-receipts.service';
 import { ReceiptsStore } from './receipts-store.service';
 
@@ -101,6 +104,51 @@ describe('ReceiptsStore', () => {
       expect(deleteSpy).toHaveBeenCalledWith('old');
       expect(deleteSpy).not.toHaveBeenCalledWith('foreign');
       expect(JSON.parse(localStorage.getItem('fuelscan.pendingDeletes')!)).toEqual([{ id: 'foreign', userId: 'someone-else' }]);
+    });
+  });
+
+  describe('lokalna kopija', () => {
+    const userId = 'cache-user';
+    const key = userCacheKey('receipts', userId);
+    afterEach(async () => cacheDelete(key));
+
+    function setup(fetch$: Observable<FuelReceiptRecord[]>) {
+      TestBed.configureTestingModule({
+        providers: [
+          { provide: FuelReceiptsService, useValue: { fetchUserReceipts$: () => fetch$, deleteReceipt$: () => of(true) } },
+          { provide: AuthService, useValue: { currentUser: signal({ id: userId }) } },
+        ],
+      });
+      return TestBed.inject(ReceiptsStore);
+    }
+
+    it('bez interneta prikazuje poslednju sačuvanu kopiju', async () => {
+      await cacheSet(key, { savedAt: '2026-10-26T18:00:00Z', data: [record('cached', '2026-10-20T10:00:00+02:00')] });
+      const store = setup(throwError(() => new TypeError('Failed to fetch')));
+
+      store.load();
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(store.receipts().map((r) => r.id)).toEqual(['cached']);
+      expect(store.fromCache()).toBeTrue();
+      expect(store.syncedAt()).toBe('2026-10-26T18:00:00Z');
+    });
+
+    it('sveži podaci iz baze zamenjuju kopiju i upisuju se u nju', async () => {
+      await cacheSet(key, { savedAt: '2026-10-26T18:00:00Z', data: [record('cached', '2026-10-20T10:00:00+02:00')] });
+      const fresh$ = new Subject<FuelReceiptRecord[]>();
+      const store = setup(fresh$);
+
+      store.load();
+      await new Promise((r) => setTimeout(r, 50));
+      fresh$.next([record('fresh', '2026-10-27T10:00:00+01:00')]);
+      // Upis kopije se odlaže 300ms (spaja više izmena u jedan upis).
+      await new Promise((r) => setTimeout(r, 450));
+
+      expect(store.receipts().map((r) => r.id)).toEqual(['fresh']);
+      expect(store.fromCache()).toBeFalse();
+      const saved = await cacheGet<{ data: FuelReceiptRecord[] }>(key);
+      expect(saved?.data.map((r) => r.id)).toEqual(['fresh']);
     });
   });
 });

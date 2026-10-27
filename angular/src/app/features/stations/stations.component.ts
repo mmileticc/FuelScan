@@ -2,6 +2,7 @@ import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 
 import { ReceiptsStore } from '../../core/services/receipts-store.service';
+import { NetworkStatusService } from '../../core/services/network-status.service';
 import { StationNicknamesService } from '../../core/services/station-nicknames.service';
 import { FuelCategory, formatLocation } from '../../core/utils/receipt-parsing.utils';
 import { CategoryPriceHistory, StationSummary, groupByStation } from '../../core/utils/stations.utils';
@@ -100,11 +101,16 @@ type SortMode = 'frequent' | 'cheapest' | 'recent';
                       [value]="nicknames.get(s.key) ?? ''"
                       aria-label="Nadimak stanice"
                     />
-                    <button type="submit" class="text-xs bg-fuel-600 hover:bg-fuel-500 px-3 rounded-lg">Sačuvaj</button>
+                    <button type="submit" [disabled]="!online()" class="text-xs bg-fuel-600 hover:bg-fuel-500 disabled:opacity-40 px-3 rounded-lg">Sačuvaj</button>
                     <button type="button" class="text-xs text-slate-400 px-2" (click)="editingKey.set(null)">Otkaži</button>
                   </form>
                 } @else {
-                  <button type="button" class="text-[11px] text-fuel-400 hover:text-fuel-300" (click)="editingKey.set(s.key)">
+                  <button
+                    type="button"
+                    class="text-[11px] text-fuel-400 hover:text-fuel-300 disabled:opacity-40"
+                    [disabled]="!online()"
+                    (click)="editingKey.set(s.key)"
+                  >
                     ✎ {{ nicknames.get(s.key) ? 'Izmeni nadimak' : 'Dodaj nadimak' }}
                   </button>
                 }
@@ -155,6 +161,7 @@ type SortMode = 'frequent' | 'cheapest' | 'recent';
 export class StationsComponent implements OnInit {
   protected readonly store = inject(ReceiptsStore);
   protected readonly nicknames = inject(StationNicknamesService);
+  protected readonly online = inject(NetworkStatusService).online;
 
   readonly categoryOptions: { value: FuelCategory | 'all'; label: string }[] = [
     { value: 'all', label: 'Sva goriva' },
@@ -219,6 +226,7 @@ export class StationsComponent implements OnInit {
   }
 
   saveNickname(key: string, value: string): void {
+    if (!this.online()) return;
     this.nicknames.save(key, value, () => this.editingKey.set(null));
   }
 

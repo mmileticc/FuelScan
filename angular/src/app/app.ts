@@ -1,4 +1,5 @@
 import { Component, inject, signal } from '@angular/core';
+import { DatePipe } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { SwUpdate } from '@angular/service-worker';
@@ -8,8 +9,10 @@ import { AuthService } from './core/services/auth.service';
 import { ReceiptsStore } from './core/services/receipts-store.service';
 import { StationNicknamesService } from './core/services/station-nicknames.service';
 import { ToastService } from './core/services/toast.service';
-import { IosInstallHintComponent } from './shared/ios-install-hint/ios-install-hint.component';
+import { IosInstallHintComponent, isStandalone } from './shared/ios-install-hint/ios-install-hint.component';
 import { primeScanFeedbackOnFirstGesture } from './core/scanner/scan-feedback';
+import { NetworkStatusService } from './core/services/network-status.service';
+import { requestPersistentStorage } from './core/storage/local-cache';
 import { friendlyError } from './core/utils/errors.utils';
 
 /**
@@ -20,7 +23,7 @@ import { friendlyError } from './core/utils/errors.utils';
  */
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, IosInstallHintComponent],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, IosInstallHintComponent, DatePipe],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
@@ -28,9 +31,10 @@ export class App {
   protected readonly auth = inject(AuthService);
   protected readonly toastService = inject(ToastService);
   private readonly router = inject(Router);
-  private readonly store = inject(ReceiptsStore);
+  protected readonly store = inject(ReceiptsStore);
   private readonly nicknames = inject(StationNicknamesService);
   private readonly swUpdate = inject(SwUpdate, { optional: true });
+  protected readonly network = inject(NetworkStatusService);
 
   /** Nova verzija je preuzeta - traka sa dugmetom "Osveži" (ne toast, da je druga poruka ne prekrije). */
   protected readonly updateReady = signal(false);
@@ -43,6 +47,23 @@ export class App {
     this.watchForUpdates();
     // iPhone pušta zvuk tek posle dodira - otključaj ga na prvom dodiru, pre ekrana Skeniraj.
     primeScanFeedbackOnFirstGesture();
+    // Da Android ne obriše lokalnu kopiju sam kad mu ponestane prostora. Samo za
+    // instaliranu aplikaciju - Firefox na običnom sajtu za ovo prikazuje upitnik.
+    if (isStandalone()) {
+      requestPersistentStorage();
+    }
+    // Svaka odjava (dugme, ili sesija poništena na drugom uređaju) briše podatke
+    // tog korisnika iz memorije i sa telefona.
+    this.auth.onSignedOut((userId) => {
+      this.store.reset();
+      this.nicknames.reset();
+      void this.store.clearCache(userId);
+      void this.nicknames.clearCache(userId);
+      // Sesija istekla/poništena dok je korisnik u aplikaciji - vrati ga na prijavu.
+      if (!this.router.url.startsWith('/welcome')) {
+        void this.router.navigate(['/welcome']);
+      }
+    });
   }
 
   /**
@@ -78,9 +99,8 @@ export class App {
     try {
       // Brisanja koja čekaju rok za "Poništi" moraju da se izvrše dok je sesija još važeća.
       this.store.flushScheduledDeletes();
+      // Brisanje podataka i lokalne kopije radi `onSignedOut` (vidi konstruktor).
       await this.auth.signOut();
-      this.store.reset();
-      this.nicknames.reset();
       this.toastService.show('Uspešno ste odjavljeni.', 'success');
       await this.router.navigate(['/welcome']);
     } catch (err) {

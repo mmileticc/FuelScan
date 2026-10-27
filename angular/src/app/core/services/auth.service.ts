@@ -1,8 +1,9 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
 import type { User } from '@supabase/supabase-js';
 
 import { SUPABASE_URL } from '../config/app-config';
 import { supabaseClient } from '../supabase/supabase-client';
+import { NetworkStatusService } from './network-status.service';
 
 /** Ključ pod kojim supabase-js čuva sesiju u localStorage (`sb-<ref>-auth-token`). */
 const SESSION_STORAGE_KEY = `sb-${new URL(SUPABASE_URL).hostname.split('.')[0]}-auth-token`;
@@ -29,6 +30,25 @@ export class AuthService {
   readonly offlineSession = signal(false);
 
   private initialized = false;
+  private readonly network = inject(NetworkStatusService);
+  private readonly signedOutHandlers: Array<(userId: string) => void> = [];
+
+  /**
+   * Poziva se kad god prijavljeni korisnik nestane - klik na "Odjavi se", ali i
+   * kad Supabase sam poništi sesiju (odjava sa drugog uređaja, opozvan token).
+   * Tu se brišu podaci tog korisnika iz memorije i sa telefona.
+   */
+  onSignedOut(handler: (userId: string) => void): void {
+    this.signedOutHandlers.push(handler);
+  }
+
+  private setUser(user: User | null): void {
+    const previous = this.currentUser();
+    this.currentUser.set(user);
+    if (previous && previous.id !== user?.id) {
+      for (const handler of this.signedOutHandlers) handler(previous.id);
+    }
+  }
 
   /** Poziva se jednom pri startu aplikacije (vidi `provideAppInitializer` u app.config.ts). */
   async init(): Promise<void> {
@@ -45,10 +65,10 @@ export class AuthService {
       if (session) {
         this.offlineSession.set(false);
       }
-      this.currentUser.set(session?.user ?? null);
+      this.setUser(session?.user ?? null);
     });
 
-    window.addEventListener('online', () => void this.revalidate());
+    this.network.onReconnect(() => void this.revalidate());
 
     if (!navigator.onLine && this.useStoredSession()) {
       // Bez mreže getSession() bi čekao na neuspelu obnovu tokena - ne blokiraj start aplikacije.
@@ -71,7 +91,7 @@ export class AuthService {
       return;
     }
     this.offlineSession.set(false);
-    this.currentUser.set(user);
+    this.setUser(user);
   }
 
   /** Postavlja korisnika iz sačuvane sesije; `false` ako sesije nema. */
@@ -113,7 +133,7 @@ export class AuthService {
       }
     }
     this.offlineSession.set(false);
-    this.currentUser.set(null);
+    this.setUser(null);
   }
 
   /** Ime za pozdravnu poruku na dashboard-u (isto ponašanje kao `handleSignedInUI`). */

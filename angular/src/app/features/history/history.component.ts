@@ -4,13 +4,14 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { FuelReceiptRecord } from '../../core/models/receipt.model';
 import { ReceiptsStore } from '../../core/services/receipts-store.service';
+import { NetworkStatusService } from '../../core/services/network-status.service';
 import { StationNicknamesService } from '../../core/services/station-nicknames.service';
 import { ToastService } from '../../core/services/toast.service';
 import { friendlyError } from '../../core/utils/errors.utils';
 import { FuelCategory, detectFuel, formatLocation } from '../../core/utils/receipt-parsing.utils';
 import { StatsPeriod, filterByPeriod } from '../../core/utils/receipt-stats.utils';
 import { ReceiptFormComponent, ReceiptFormValue } from '../../shared/receipt-form/receipt-form.component';
-import { receiptsToCsv } from './receipts-csv';
+import { downloadReceiptsXlsx } from './receipts-export';
 
 const PAGE_SIZE = 30;
 const UNDO_MS = 5000;
@@ -29,11 +30,11 @@ const UNDO_MS = 5000;
         <h2 class="text-xl font-bold">Istorija punjenja</h2>
         <button
           type="button"
-          (click)="exportCsv()"
-          [disabled]="!filtered().length"
+          (click)="exportExcel()"
+          [disabled]="!filtered().length || exporting()"
           class="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-1.5 rounded-lg disabled:opacity-40"
         >
-          Izvezi CSV
+          {{ exporting() ? 'Pripremam...' : 'Izvezi Excel' }}
         </button>
       </div>
 
@@ -85,8 +86,8 @@ const UNDO_MS = 5000;
                 </div>
                 <div class="flex items-center gap-1 shrink-0">
                   <span class="text-xs text-fuel-300 bg-fuel-900 px-2 py-0.5 rounded-lg">{{ r.fuel_type ?? '—' }}</span>
-                  <button type="button" (click)="editing.set(r)" class="icon-btn" aria-label="Izmeni">✎</button>
-                  <button type="button" (click)="deleteWithUndo(r)" class="icon-btn hover:text-red-400" aria-label="Obriši">✕</button>
+                  <button type="button" (click)="editing.set(r)" [disabled]="!online()" class="icon-btn disabled:opacity-30" aria-label="Izmeni">✎</button>
+                  <button type="button" (click)="deleteWithUndo(r)" [disabled]="!online()" class="icon-btn hover:text-red-400 disabled:opacity-30" aria-label="Obriši">✕</button>
                 </div>
               </div>
               <div class="flex items-center justify-between text-sm pt-1">
@@ -136,6 +137,8 @@ const UNDO_MS = 5000;
 export class HistoryComponent implements OnInit {
   protected readonly store = inject(ReceiptsStore);
   protected readonly nicknames = inject(StationNicknamesService);
+  /** Bez interneta je istorija samo za pregled (lokalna kopija). */
+  protected readonly online = inject(NetworkStatusService).online;
   private readonly toast = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -160,6 +163,7 @@ export class HistoryComponent implements OnInit {
   readonly visible = signal(PAGE_SIZE);
   readonly editing = signal<FuelReceiptRecord | null>(null);
   readonly saving = signal(false);
+  readonly exporting = signal(false);
 
 
 
@@ -187,6 +191,7 @@ export class HistoryComponent implements OnInit {
   }
 
   deleteWithUndo(record: FuelReceiptRecord): void {
+    if (!this.online()) return;
     // Rok i stvarno brisanje vodi store (root servis) - ne prekida se napuštanjem ekrana.
     const undo = this.store.scheduleDelete(record, UNDO_MS);
     this.toast.show('Zapis obrisan.', 'info', UNDO_MS, { label: 'Poništi', handler: undo });
@@ -224,15 +229,11 @@ export class HistoryComponent implements OnInit {
     });
   }
 
-  exportCsv(): void {
-    const csv = receiptsToCsv(this.filtered(), (r) => this.nicknames.forReceipt(r));
-    // BOM da Excel ispravno prikaže č/ć/š/ž.
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `fuelscan-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  exportExcel(): void {
+    if (this.exporting()) return;
+    this.exporting.set(true);
+    downloadReceiptsXlsx(this.filtered(), (r) => this.nicknames.forReceipt(r))
+      .catch(() => this.toast.show('Izvoz nije uspeo. Pokušajte ponovo.', 'error'))
+      .finally(() => this.exporting.set(false));
   }
 }

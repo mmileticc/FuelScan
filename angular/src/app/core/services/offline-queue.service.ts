@@ -1,6 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 
 import { AuthService } from './auth.service';
+import { NetworkStatusService } from './network-status.service';
 
 export interface QueuedScan {
   url: string;
@@ -27,14 +28,7 @@ export class OfflineQueueService {
     const userId = this.auth.currentUser()?.id;
     return this.all().filter((i) => !i.userId || i.userId === userId);
   });
-  readonly online = signal(typeof navigator === 'undefined' ? true : navigator.onLine);
-
-  constructor() {
-    if (typeof window !== 'undefined') {
-      window.addEventListener('online', () => this.online.set(true));
-      window.addEventListener('offline', () => this.online.set(false));
-    }
-  }
+  readonly online = inject(NetworkStatusService).online;
 
   /** Dodaje URL u red (bez duplikata). Vraća `false` ako je već bio u redu. */
   add(url: string): boolean {

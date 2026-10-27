@@ -1,6 +1,7 @@
-import { Component, OnInit, computed, input, output, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, input, output, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 
+import { NetworkStatusService } from '../../core/services/network-status.service';
 import { belgradeOffset, parseLocalReceiptDate, roundTo2 } from '../../core/utils/receipt-parsing.utils';
 
 /** Vrednosti forme (isti nazivi kao kolone u `fuel_receipts`). `date` je ISO sa zonom. */
@@ -95,6 +96,10 @@ type NumberField = 'liters' | 'price_per_l' | 'total';
         </label>
       </div>
 
+      @if (!online()) {
+        <p class="text-[11px] text-amber-300">Bez interneta čuvanje nije moguće - sačekajte da se veza vrati.</p>
+      }
+
       <div class="flex gap-3 pt-1">
         <button
           type="button"
@@ -106,7 +111,7 @@ type NumberField = 'liters' | 'price_per_l' | 'total';
         </button>
         <button
           type="submit"
-          [disabled]="busy() || !valid()"
+          [disabled]="busy() || !valid() || !online()"
           class="flex-1 bg-fuel-600 hover:bg-fuel-500 font-semibold py-2.5 rounded-xl transition-colors disabled:opacity-40"
         >
           {{ busy() ? 'Čuvam...' : submitLabel() }}
@@ -122,6 +127,7 @@ export class ReceiptFormComponent implements OnInit {
   readonly busy = input(false);
   readonly warning = input<string | null>(null);
   readonly showNickname = input(false);
+  protected readonly online = inject(NetworkStatusService).online;
 
   readonly submitted = output<ReceiptFormValue>();
   readonly cancelled = output<void>();
@@ -179,6 +185,7 @@ export class ReceiptFormComponent implements OnInit {
   }
 
   submit(): void {
+    if (!this.online()) return;
     if (!this.valid()) {
       this.form.markAllAsTouched();
       return;

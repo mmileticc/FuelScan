@@ -2,7 +2,10 @@ import { Injectable, inject, signal } from '@angular/core';
 import { Observable, from, map, of, switchMap, throwError } from 'rxjs';
 
 import { FuelReceiptRecord } from '../models/receipt.model';
+import { CacheEntry, cacheDelete, cacheGet, cacheSet, userCacheKey } from '../storage/local-cache';
 import { supabaseClient } from '../supabase/supabase-client';
+import { AuthService } from './auth.service';
+import { NetworkStatusService } from './network-status.service';
 import { friendlyError } from '../utils/errors.utils';
 import { ReceiptsStore } from './receipts-store.service';
 import { ToastService } from './toast.service';
@@ -21,6 +24,8 @@ interface NicknameRow {
 export class StationNicknamesService {
   private readonly toast = inject(ToastService);
   private readonly store = inject(ReceiptsStore);
+  private readonly auth = inject(AuthService);
+  private readonly network = inject(NetworkStatusService);
 
   private readonly _nicknames = signal<ReadonlyMap<string, string>>(new Map());
   private loaded = false;
@@ -29,7 +34,7 @@ export class StationNicknamesService {
 
   constructor() {
     // Učitavanje nije uspelo bez interneta - pokušaj ponovo čim se veza vrati.
-    window.addEventListener('online', () => {
+    this.network.onReconnect(() => {
       if (this.wanted && !this.loaded) this.load();
     });
   }
@@ -41,6 +46,7 @@ export class StationNicknamesService {
     this.wanted = true;
     if ((this.loaded && !force) || this.loading) return;
     this.loading = true;
+    void this.applyCache();
     from(supabaseClient.from('station_nicknames').select('station_key, nickname')).subscribe({
       next: ({ data, error }) => {
         this.loading = false;
@@ -51,6 +57,8 @@ export class StationNicknamesService {
         }
         this._nicknames.set(new Map((data as NicknameRow[]).map((r) => [r.station_key, r.nickname])));
         this.loaded = true;
+        this.network.reportSuccess();
+        this.writeCache();
       },
       error: () => (this.loading = false),
     });
@@ -60,6 +68,29 @@ export class StationNicknamesService {
     this._nicknames.set(new Map());
     this.loaded = false;
     this.wanted = false;
+  }
+
+  /** Briše lokalnu kopiju nadimaka korisnika (pri odjavi). */
+  clearCache(userId: string): Promise<void> {
+    return cacheDelete(userCacheKey('nicknames', userId));
+  }
+
+  private async applyCache(): Promise<void> {
+    const userId = this.auth.currentUser()?.id;
+    if (!userId) return;
+    const entry = await cacheGet<CacheEntry<Record<string, string>>>(userCacheKey('nicknames', userId));
+    if (!entry?.data || this.loaded || this.auth.currentUser()?.id !== userId) return;
+    this._nicknames.set(new Map(Object.entries(entry.data)));
+  }
+
+  private writeCache(): void {
+    const userId = this.auth.currentUser()?.id;
+    if (!userId || !this.loaded) return;
+    const entry: CacheEntry<Record<string, string>> = {
+      savedAt: new Date().toISOString(),
+      data: Object.fromEntries(this._nicknames()),
+    };
+    void cacheSet(userCacheKey('nicknames', userId), entry);
   }
 
   get(key: string | null | undefined): string | null {
@@ -113,6 +144,7 @@ export class StationNicknamesService {
         if (value) next.set(key, value);
         else next.delete(deletedKey);
         this._nicknames.set(next);
+        this.writeCache();
       }),
     );
   }

@@ -2,10 +2,12 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, tap } from 'rxjs';
 
 import { FuelReceiptRecord, FuelReceiptRow } from '../models/receipt.model';
+import { CacheEntry, cacheDelete, cacheGet, cacheSet, userCacheKey } from '../storage/local-cache';
 import { OFFLINE_MESSAGE, friendlyError, isNetworkError } from '../utils/errors.utils';
 import { stationKeyMap } from '../utils/stations.utils';
 import { AuthService } from './auth.service';
 import { FuelReceiptPatch, FuelReceiptsService } from './fuel-receipts.service';
+import { NetworkStatusService } from './network-status.service';
 import { ToastService } from './toast.service';
 
 /** Brisanja koja čekaju istek roka za "Poništi" - preživljavaju i zatvaranje aplikacije. */
@@ -26,10 +28,19 @@ export class ReceiptsStore {
   private readonly api = inject(FuelReceiptsService);
   private readonly toast = inject(ToastService);
   private readonly auth = inject(AuthService);
+  private readonly network = inject(NetworkStatusService);
+  /** Upis kopije se odlaže i spaja (više izmena zaredom = jedan upis). */
+  private cacheWriteTimer?: ReturnType<typeof setTimeout>;
 
   private readonly _receipts = signal<FuelReceiptRecord[]>([]);
   private readonly _loading = signal(false);
+  /** Kad su prikazani podaci poslednji put potvrđeni iz baze (za "podaci od ..." offline). */
+  private readonly _syncedAt = signal<string | null>(null);
+  /** `true` dok se prikazuje lokalna kopija, a sveži podaci iz baze još nisu stigli. */
+  private readonly _fromCache = signal(false);
   private loaded = false;
+  /** Za kog korisnika je lokalna kopija već primenjena u ovoj sesiji. */
+  private cacheAppliedFor: string | null = null;
   /** Neki ekran je tražio podatke (od poslednje odjave) - samo tada se osvežava kad se veza vrati. */
   private wanted = false;
   /** Poruka "nema interneta" se prikazuje jednom po prekidu veze, ne na svakom ekranu. */
@@ -42,8 +53,8 @@ export class ReceiptsStore {
     // Aplikacija se zatvara usred roka za "Poništi" -> pokušaj brisanje odmah;
     // ako ni to ne stigne, id ostaje zapamćen i briše se pri sledećem učitavanju.
     window.addEventListener('pagehide', () => this.flushScheduledDeletes());
-    // Veza se vratila - osveži podatke bez čekanja da korisnik promeni ekran.
-    window.addEventListener('online', () => {
+    // Veza se vratila (ili periodičan pokušaj dok zahtevi padaju) - osveži podatke.
+    this.network.onReconnect(() => {
       this.offlineNotified = false;
       if (this.wanted) this.load(true);
     });
@@ -52,6 +63,8 @@ export class ReceiptsStore {
   /** Sortirano po datumu, najnoviji prvi. */
   readonly receipts = this._receipts.asReadonly();
   readonly loading = this._loading.asReadonly();
+  readonly syncedAt = this._syncedAt.asReadonly();
+  readonly fromCache = this._fromCache.asReadonly();
   /** `id` računa -> ključ stanice (vidi `groupByStation`). */
   readonly stationKeys = computed(() => stationKeyMap(this._receipts()));
   readonly isEmpty = computed(() => this.loaded && !this._loading() && this._receipts().length === 0);
@@ -63,6 +76,8 @@ export class ReceiptsStore {
       return;
     }
     this._loading.set(true);
+    // Odmah prikaži lokalnu kopiju (radi i bez interneta), pa je zameni svežim podacima iz baze.
+    void this.applyCache();
     this.api.fetchUserReceipts$().subscribe({
       next: (data) => {
         const ops = this.pendingOps;
@@ -72,11 +87,16 @@ export class ReceiptsStore {
         this.finishLeftoverDeletes(leftover);
         this.loaded = true;
         this._loading.set(false);
+        this._fromCache.set(false);
+        this._syncedAt.set(new Date().toISOString());
+        this.network.reportSuccess();
+        this.writeCache();
       },
       error: (err: unknown) => {
         this.pendingOps = [];
         this._loading.set(false);
         if (isNetworkError(err)) {
+          this.network.reportFailure();
           if (!this.offlineNotified) {
             this.offlineNotified = true;
             this.toast.show(OFFLINE_MESSAGE, 'warning');
@@ -94,18 +114,66 @@ export class ReceiptsStore {
     this._receipts.set([]);
     this.loaded = false;
     this.wanted = false;
+    this.cacheAppliedFor = null;
+    this._fromCache.set(false);
+    this._syncedAt.set(null);
+    clearTimeout(this.cacheWriteTimer);
+    this.cacheWriteTimer = undefined;
   }
 
+  /** Briše lokalnu kopiju korisnika sa telefona (pri odjavi). */
+  clearCache(userId: string): Promise<void> {
+    return cacheDelete(userCacheKey('receipts', userId));
+  }
+
+  private async applyCache(): Promise<void> {
+    const userId = this.auth.currentUser()?.id;
+    if (!userId || this.cacheAppliedFor === userId) return;
+    this.cacheAppliedFor = userId;
+
+    const entry = await cacheGet<CacheEntry<FuelReceiptRecord[]>>(userCacheKey('receipts', userId));
+    // Baza je u međuvremenu već odgovorila, ili je korisnik promenjen - kopija više ne treba.
+    if (!entry || !Array.isArray(entry.data) || this.loaded || this.auth.currentUser()?.id !== userId) return;
+
+    const leftover = this.leftoverDeletes().map((d) => d.id);
+    this._receipts.set(this.pendingOps.reduce((list, op) => op(list), entry.data).filter((r) => !leftover.includes(r.id)));
+    this._fromCache.set(true);
+    this._syncedAt.set(entry.savedAt);
+  }
+
+  /** Pamti trenutno stanje kao lokalnu kopiju (posle učitavanja iz baze ili uspešne izmene). */
+  private writeCache(): void {
+    const userId = this.auth.currentUser()?.id;
+    if (!userId || !this.loaded) return;
+    clearTimeout(this.cacheWriteTimer);
+    this.cacheWriteTimer = setTimeout(() => {
+      this.cacheWriteTimer = undefined;
+      // Korisnik se u međuvremenu odjavio ili promenio - ne vraćaj obrisanu kopiju.
+      if (this.auth.currentUser()?.id !== userId || !this.loaded) return;
+      const entry: CacheEntry<FuelReceiptRecord[]> = {
+        savedAt: this._syncedAt() ?? new Date().toISOString(),
+        data: this._receipts(),
+      };
+      void cacheSet(userCacheKey('receipts', userId), entry);
+    }, 300);
+  }
+
+  // Svaki uspeo poziv baze potvrđuje da veza radi (gasi offline stanje posle kratkog prekida).
   insert$(row: FuelReceiptRow): Observable<FuelReceiptRecord> {
-    return this.api.insert$(row).pipe(tap((record) => this.upsertLocal(record)));
+    return this.api.insert$(row).pipe(tap((record) => this.afterSuccess(() => this.upsertLocal(record))));
   }
 
   update$(id: string, patch: FuelReceiptPatch): Observable<FuelReceiptRecord> {
-    return this.api.update$(id, patch).pipe(tap((record) => this.upsertLocal(record)));
+    return this.api.update$(id, patch).pipe(tap((record) => this.afterSuccess(() => this.upsertLocal(record))));
   }
 
   delete$(id: string): Observable<true> {
-    return this.api.deleteReceipt$(id).pipe(tap(() => this.removeLocal(id)));
+    return this.api.deleteReceipt$(id).pipe(tap(() => this.afterSuccess(() => this.removeLocal(id))));
+  }
+
+  private afterSuccess(apply: () => void): void {
+    this.network.reportSuccess();
+    apply();
   }
 
   /**
@@ -140,10 +208,16 @@ export class ReceiptsStore {
     const record = this.scheduledDeletes.get(id)?.record;
     this.scheduledDeletes.delete(id);
     this.api.deleteReceipt$(id).subscribe({
-      next: () => this.forgetDelete(id),
+      next: () => {
+        this.network.reportSuccess();
+        this.forgetDelete(id);
+      },
       error: (err: unknown) => {
         // Bez mreže: id ostaje zapamćen i brisanje se završava pri sledećem učitavanju.
-        if (isNetworkError(err)) return;
+        if (isNetworkError(err)) {
+          this.network.reportFailure();
+          return;
+        }
         this.forgetDelete(id);
         if (record) this.upsertLocal(record);
         this.toast.show(friendlyError(err, 'brisanju'), 'error');
@@ -207,6 +281,7 @@ export class ReceiptsStore {
       this.pendingOps.push(op);
     }
     this._receipts.update(op);
+    this.writeCache();
   }
 }
 

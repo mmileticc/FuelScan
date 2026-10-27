@@ -36,6 +36,15 @@
   </div>
 }
 
+@if (auth.currentUser() && !network.online()) {
+  <div class="bg-amber-500/15 border-b border-amber-500/30 text-amber-200 text-[11px] px-4 py-1.5 text-center" role="status">
+    Bez interneta - samo pregled, izmene nisu moguće.
+    @if (store.syncedAt(); as at) {
+      Podaci od {{ at | date: 'd.M. HH:mm' }}.
+    }
+  </div>
+}
+
 <main class="flex-1 overflow-y-auto">
   @if (auth.currentUser()) {
     <app-ios-install-hint />

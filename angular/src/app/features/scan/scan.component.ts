@@ -16,6 +16,7 @@ import { Router } from '@angular/router';
 import { ParsedReceipt, ReceiptErrorKind, ReceiptScanError } from '../../core/models/receipt.model';
 import { cropCenter, detectQr, detectQrFromFile, warmUpQrDetector } from '../../core/scanner/qr-detector';
 import { scanSuccessFeedback } from '../../core/scanner/scan-feedback';
+import { NetworkStatusService } from '../../core/services/network-status.service';
 import { OfflineQueueService } from '../../core/services/offline-queue.service';
 import { ReceiptsStore } from '../../core/services/receipts-store.service';
 import { StationNicknamesService } from '../../core/services/station-nicknames.service';
@@ -266,6 +267,7 @@ export class ScanComponent implements AfterViewInit, OnDestroy {
   protected readonly queue = inject(OfflineQueueService);
   private readonly store = inject(ReceiptsStore);
   private readonly nicknames = inject(StationNicknamesService);
+  private readonly network = inject(NetworkStatusService);
 
   @ViewChild('videoPreview') private videoRef?: ElementRef<HTMLVideoElement>;
 
@@ -683,6 +685,8 @@ export class ScanComponent implements AfterViewInit, OnDestroy {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (parsedReceipt) => {
+          // Skeniranje je prošlo kroz mrežu - veza radi (gasi eventualno offline stanje).
+          this.network.reportSuccess();
           this.receipt.set(parsedReceipt);
           this.resultState.set('success');
           this.mode.set('review');
@@ -690,7 +694,10 @@ export class ScanComponent implements AfterViewInit, OnDestroy {
         },
         error: (err: unknown) => {
           const kind = err instanceof ReceiptScanError ? err.kind : 'network';
-          if (kind === 'network' && !navigator.onLine) {
+          // Mrežna greška (i kad browser misli da ima interneta - slab signal na pumpi):
+          // sačuvaj QR za kasnije umesto da korisnik mora ponovo da skenira.
+          if (kind === 'network') {
+            this.network.reportFailure();
             this.enqueueOffline(decodedText);
             return;
           }
@@ -705,7 +712,7 @@ export class ScanComponent implements AfterViewInit, OnDestroy {
   private enqueueOffline(url: string): void {
     const added = this.queue.add(url);
     this.toast.show(
-      added ? 'Nema interneta - račun je sačuvan za kasniju obradu.' : 'Ovaj račun je već na čekanju.',
+      added ? 'Veza nije uspela - račun je sačuvan u "Na čekanju" za kasniju obradu.' : 'Ovaj račun je već na čekanju.',
       'info',
       4000,
     );
