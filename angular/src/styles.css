@@ -138,6 +138,27 @@ nav a[routerLink='/scan']:active {
   z-index: 5;
 }
 
+/* Blesak kad je QR kod prepoznat (vidi ScanComponent.signalDetected). */
+.camera-viewport.scan-flash::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: inset 0 0 0 4px #34d399;
+  animation: scanFlash 0.45s ease-out forwards;
+}
+
+@keyframes scanFlash {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
 @layer components {
   .cam-btn {
     @apply bg-black/40 backdrop-blur-md w-11 h-11 rounded-full border border-white/20 hover:bg-black/60 transition flex items-center justify-center;

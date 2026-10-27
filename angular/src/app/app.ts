@@ -8,6 +8,8 @@ import { AuthService } from './core/services/auth.service';
 import { ReceiptsStore } from './core/services/receipts-store.service';
 import { StationNicknamesService } from './core/services/station-nicknames.service';
 import { ToastService } from './core/services/toast.service';
+import { IosInstallHintComponent } from './shared/ios-install-hint/ios-install-hint.component';
+import { primeScanFeedbackOnFirstGesture } from './core/scanner/scan-feedback';
 import { friendlyError } from './core/utils/errors.utils';
 
 /**
@@ -18,7 +20,7 @@ import { friendlyError } from './core/utils/errors.utils';
  */
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, IosInstallHintComponent],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
@@ -39,6 +41,8 @@ export class App {
 
   constructor() {
     this.watchForUpdates();
+    // iPhone pušta zvuk tek posle dodira - otključaj ga na prvom dodiru, pre ekrana Skeniraj.
+    primeScanFeedbackOnFirstGesture();
   }
 
   /**

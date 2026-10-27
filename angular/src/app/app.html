@@ -37,6 +37,9 @@
 }
 
 <main class="flex-1 overflow-y-auto">
+  @if (auth.currentUser()) {
+    <app-ios-install-hint />
+  }
   <router-outlet></router-outlet>
 </main>
 

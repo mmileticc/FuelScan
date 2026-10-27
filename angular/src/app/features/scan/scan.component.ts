@@ -15,6 +15,7 @@ import { Router } from '@angular/router';
 
 import { ParsedReceipt, ReceiptErrorKind, ReceiptScanError } from '../../core/models/receipt.model';
 import { cropCenter, detectQr, detectQrFromFile, warmUpQrDetector } from '../../core/scanner/qr-detector';
+import { scanSuccessFeedback } from '../../core/scanner/scan-feedback';
 import { OfflineQueueService } from '../../core/services/offline-queue.service';
 import { ReceiptsStore } from '../../core/services/receipts-store.service';
 import { StationNicknamesService } from '../../core/services/station-nicknames.service';
@@ -71,6 +72,7 @@ const DETECT_INTERVAL_MS = 120;
         <div
           class="camera-viewport relative w-full aspect-[3/4] max-h-[52vh] overflow-hidden bg-slate-900 shrink-0"
           [class.scanning-active]="cameraActive()"
+          [class.scan-flash]="flashing()"
         >
           <video
             #videoPreview
@@ -288,6 +290,8 @@ export class ScanComponent implements AfterViewInit, OnDestroy {
   readonly zoomRange = signal<{ min: number; max: number; step: number } | null>(null);
   readonly zoom = signal(1);
   readonly imagePreviewUrl = signal<string | null>(null);
+  /** Kratak blesak okvira kad je kod prepoznat (iPhone nema vibraciju). */
+  readonly flashing = signal(false);
   readonly scanStatus = signal<ScanStatus>({ message: 'Spreman za skeniranje', type: 'idle' });
   readonly resultState = signal<'idle' | 'loading' | 'success' | 'error'>('idle');
   readonly receipt = signal<ParsedReceipt | null>(null);
@@ -610,7 +614,7 @@ export class ScanComponent implements AfterViewInit, OnDestroy {
       return false;
     }
 
-    navigator.vibrate?.(80);
+    this.signalDetected();
     // Zamrzni kadar na kom je kod pronađen, da korisnik vidi šta je skenirano.
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth;
@@ -621,6 +625,13 @@ export class ScanComponent implements AfterViewInit, OnDestroy {
     this.stopCamera();
     this.handleDecodedText(value);
     return true;
+  }
+
+  /** Vibracija (Android) + bip + blesak okvira - korisnik odmah zna da je kod uhvaćen. */
+  private signalDetected(): void {
+    scanSuccessFeedback();
+    this.flashing.set(true);
+    setTimeout(() => this.flashing.set(false), 450);
   }
 
   private handleVisibilityChange(): void {
@@ -647,6 +658,7 @@ export class ScanComponent implements AfterViewInit, OnDestroy {
       void this.startCamera();
       return;
     }
+    this.signalDetected();
     this.handleDecodedText(value);
   }
 
