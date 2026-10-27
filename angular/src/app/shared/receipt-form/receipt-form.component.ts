@@ -14,6 +14,11 @@ export interface ReceiptFormValue {
   total: number | null;
   date: string | null;
   odometer_km: number | null;
+  /**
+   * Nadimak STANICE (važi za sve njene račune). `undefined` = korisnik ga nije
+   * menjao; `null` = obrisan. Samo kad je `showNickname`.
+   */
+  nickname?: string | null;
 }
 
 type NumberField = 'liters' | 'price_per_l' | 'total';
@@ -37,8 +42,16 @@ type NumberField = 'liters' | 'price_per_l' | 'total';
         <p class="text-xs bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded-xl px-3 py-2">{{ warning() }}</p>
       }
 
+      @if (showNickname()) {
+        <label class="block">
+          <span class="field-label">Nadimak stanice (opciono)</span>
+          <input formControlName="nickname" class="field-input" maxlength="60" placeholder="npr. Pumpa kod mosta" autocomplete="off" />
+          <span class="block text-[10px] text-slate-500 mt-1">Važi za sve račune ove stanice i prikazuje se umesto zvaničnog naziva.</span>
+        </label>
+      }
+
       <label class="block">
-        <span class="field-label">Stanica</span>
+        <span class="field-label">Stanica (naziv sa računa)</span>
         <input formControlName="station" class="field-input" placeholder="npr. NIS Petrol Beograd" autocomplete="off" />
       </label>
 
@@ -123,6 +136,7 @@ export class ReceiptFormComponent implements OnInit {
   readonly cancelLabel = input('Odbaci');
   readonly busy = input(false);
   readonly warning = input<string | null>(null);
+  readonly showNickname = input(false);
 
   readonly submitted = output<ReceiptFormValue>();
   readonly cancelled = output<void>();
@@ -139,6 +153,7 @@ export class ReceiptFormComponent implements OnInit {
     price_per_l: new FormControl<number | null>(null, [Validators.min(0)]),
     total: new FormControl<number | null>(null, [Validators.required, Validators.min(0.01)]),
     odometer_km: new FormControl<number | null>(null, [Validators.min(0)]),
+    nickname: new FormControl<string>('', { nonNullable: true }),
   });
 
   private readonly status = signal(this.form.status);
@@ -157,6 +172,7 @@ export class ReceiptFormComponent implements OnInit {
         price_per_l: init.price_per_l ?? null,
         total: init.total ?? null,
         odometer_km: init.odometer_km ?? null,
+        nickname: init.nickname ?? '',
       });
     } else {
       this.form.patchValue({ date: toDateTimeLocal(new Date().toISOString()) });
@@ -198,6 +214,9 @@ export class ReceiptFormComponent implements OnInit {
       total: roundTo2(num(v.total)),
       date: fromDateTimeLocal(v.date),
       odometer_km: num(v.odometer_km) === null ? null : Math.round(v.odometer_km as number),
+      // Nadimak se šalje SAMO ako ga je korisnik dirao - prazno, nedirnuto polje
+      // (npr. ručni unos za stanicu koja već ima nadimak) ne sme da ga obriše.
+      ...(this.showNickname() && this.form.controls.nickname.dirty ? { nickname: text(v.nickname) } : {}),
     });
   }
 }

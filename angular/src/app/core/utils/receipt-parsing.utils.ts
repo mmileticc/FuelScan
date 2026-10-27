@@ -245,3 +245,8 @@ export function detectFuel(name: string | null | undefined): FuelDetection {
   }
   return { isFuel: false, category: null };
 }
+
+/** "Adresa, Grad" za prikaz (ili "Nepoznata lokacija"). */
+export function formatLocation(item: { address?: string | null; city?: string | null }): string {
+  return [item.address, item.city].filter((v): v is string => !!v).join(', ') || 'Nepoznata lokacija';
+}

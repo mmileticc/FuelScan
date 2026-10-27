@@ -2,6 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, tap } from 'rxjs';
 
 import { FuelReceiptRecord, FuelReceiptRow } from '../models/receipt.model';
+import { stationKeyMap } from '../utils/stations.utils';
 import { FuelReceiptPatch, FuelReceiptsService } from './fuel-receipts.service';
 import { ToastService } from './toast.service';
 
@@ -17,10 +18,14 @@ export class ReceiptsStore {
   private readonly _receipts = signal<FuelReceiptRecord[]>([]);
   private readonly _loading = signal(false);
   private loaded = false;
+  /** Lokalne izmene napravljene dok `load()` čeka odgovor - primenjuju se i na pristigle podatke. */
+  private pendingOps: Array<(list: FuelReceiptRecord[]) => FuelReceiptRecord[]> = [];
 
   /** Sortirano po datumu, najnoviji prvi. */
   readonly receipts = this._receipts.asReadonly();
   readonly loading = this._loading.asReadonly();
+  /** `id` računa -> ključ stanice (vidi `groupByStation`). */
+  readonly stationKeys = computed(() => stationKeyMap(this._receipts()));
   readonly isEmpty = computed(() => this.loaded && !this._loading() && this._receipts().length === 0);
 
   /** Učitava jednom; `force` ponovo vuče iz baze. */
@@ -31,11 +36,14 @@ export class ReceiptsStore {
     this._loading.set(true);
     this.api.fetchUserReceipts$().subscribe({
       next: (data) => {
-        this._receipts.set(data);
+        const ops = this.pendingOps;
+        this.pendingOps = [];
+        this._receipts.set(ops.reduce((list, op) => op(list), data));
         this.loaded = true;
         this._loading.set(false);
       },
       error: (err: unknown) => {
+        this.pendingOps = [];
         this._loading.set(false);
         this.toast.show(err instanceof Error ? err.message : 'Greška pri učitavanju podataka.', 'error');
       },
@@ -44,6 +52,7 @@ export class ReceiptsStore {
 
   /** Briše keš (npr. pri odjavi), da drugi korisnik na istom uređaju ne vidi tuđe podatke. */
   reset(): void {
+    this.pendingOps = [];
     this._receipts.set([]);
     this.loaded = false;
   }
@@ -62,11 +71,18 @@ export class ReceiptsStore {
 
   /** Lokalno sklanjanje bez poziva baze (za "Poništi" tok brisanja). */
   removeLocal(id: string): void {
-    this._receipts.update((list) => list.filter((r) => r.id !== id));
+    this.mutate((list) => list.filter((r) => r.id !== id));
   }
 
   upsertLocal(record: FuelReceiptRecord): void {
-    this._receipts.update((list) => sortByDateDesc([record, ...list.filter((r) => r.id !== record.id)]));
+    this.mutate((list) => sortByDateDesc([record, ...list.filter((r) => r.id !== record.id)]));
+  }
+
+  private mutate(op: (list: FuelReceiptRecord[]) => FuelReceiptRecord[]): void {
+    if (this._loading()) {
+      this.pendingOps.push(op);
+    }
+    this._receipts.update(op);
   }
 }
 

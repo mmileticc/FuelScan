@@ -16,9 +16,12 @@ import { Router } from '@angular/router';
 import { ParsedReceipt, ReceiptErrorKind, ReceiptScanError } from '../../core/models/receipt.model';
 import { cropCenter, detectQr, detectQrFromFile, warmUpQrDetector } from '../../core/scanner/qr-detector';
 import { OfflineQueueService } from '../../core/services/offline-queue.service';
+import { ReceiptsStore } from '../../core/services/receipts-store.service';
+import { StationNicknamesService } from '../../core/services/station-nicknames.service';
 import { ReceiptService } from '../../core/services/receipt.service';
 import { ToastService } from '../../core/services/toast.service';
 import { isSufReceiptUrl } from '../../core/utils/receipt-parsing.utils';
+import { resolveStationKey } from '../../core/utils/stations.utils';
 import { ReceiptFormComponent, ReceiptFormValue } from '../../shared/receipt-form/receipt-form.component';
 
 type ScanStatusType = 'idle' | 'loading' | 'success' | 'warning' | 'error';
@@ -235,6 +238,7 @@ const DETECT_INTERVAL_MS = 120;
           <app-receipt-form
             [initial]="formInitial()"
             [busy]="isSaving()"
+            [showNickname]="true"
             [warning]="data.fuel_type ? null : noFuelWarning"
             (submitted)="saveReceipt($event)"
             (cancelled)="discardReceipt()"
@@ -245,7 +249,7 @@ const DETECT_INTERVAL_MS = 120;
       @if (mode() === 'manual') {
         <div class="mx-4 my-4 bg-surface-card border border-surface-border rounded-2xl p-5 space-y-3">
           <p class="font-semibold text-base">Ručni unos točenja</p>
-          <app-receipt-form [busy]="isSaving()" cancelLabel="Nazad" (submitted)="saveReceipt($event)" (cancelled)="resetScan()" />
+          <app-receipt-form [busy]="isSaving()" [showNickname]="true" cancelLabel="Nazad" (submitted)="saveReceipt($event)" (cancelled)="resetScan()" />
         </div>
       }
     </section>
@@ -257,6 +261,8 @@ export class ScanComponent implements AfterViewInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   protected readonly queue = inject(OfflineQueueService);
+  private readonly store = inject(ReceiptsStore);
+  private readonly nicknames = inject(StationNicknamesService);
 
   @ViewChild('videoPreview') private videoRef?: ElementRef<HTMLVideoElement>;
 
@@ -300,6 +306,8 @@ export class ScanComponent implements AfterViewInit, OnDestroy {
           total: r.fuel_type ? r.total : null,
           date: r.date,
           odometer_km: null,
+          // Ako je ova stanica već dobila nadimak, ponudi ga.
+          nickname: this.nicknames.get(resolveStationKey(r, this.store.receipts())),
         }
       : null;
   });
@@ -309,6 +317,9 @@ export class ScanComponent implements AfterViewInit, OnDestroy {
 
   constructor() {
     warmUpQrDetector();
+    // Potrebno za proveru postojećeg nadimka stanice na pregledu.
+    this.store.load();
+    this.nicknames.load();
     document.addEventListener('visibilitychange', this.onVisibilityChange);
   }
 
@@ -467,12 +478,13 @@ export class ScanComponent implements AfterViewInit, OnDestroy {
     if (this.isSaving()) return;
 
     const base = this.mode() === 'review' ? this.receipt() : null;
+    const { nickname, ...fields } = value;
     const toSave: ParsedReceipt = {
       status: 'success',
       municipality: base?.municipality ?? null,
       invoice_number: base?.invoice_number ?? null,
       raw_url: base?.raw_url ?? null,
-      ...value,
+      ...fields,
     };
 
     this.isSaving.set(true);
@@ -480,9 +492,10 @@ export class ScanComponent implements AfterViewInit, OnDestroy {
       .saveReceipt$(toSave)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: () => {
+        next: (record) => {
           this.isSaving.set(false);
           if (toSave.raw_url) this.queue.remove(toSave.raw_url);
+          this.saveNickname(record.id, nickname);
           this.toast.show('Račun je sačuvan!', 'success');
           void this.router.navigate(['/dashboard']);
         },
@@ -491,6 +504,15 @@ export class ScanComponent implements AfterViewInit, OnDestroy {
           this.toast.show(err instanceof Error && err.message ? err.message : 'Greška pri čuvanju.', 'error', 4000);
         },
       });
+  }
+
+  /** Nadimak se vezuje za stanicu sačuvanog računa (ključ iz store-a, posle upisa). */
+  private saveNickname(receiptId: string, nickname: string | null | undefined): void {
+    const key = this.store.stationKeys().get(receiptId);
+    if (!key || nickname === undefined || (nickname ?? null) === this.nicknames.get(key)) return;
+    this.nicknames.set$(key, nickname).subscribe({
+      error: () => this.toast.show('Račun je sačuvan, ali nadimak stanice nije.', 'warning', 4000),
+    });
   }
 
   discardReceipt(): void {

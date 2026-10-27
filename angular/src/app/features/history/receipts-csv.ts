@@ -1,14 +1,19 @@
 import { FuelReceiptRecord } from '../../core/models/receipt.model';
 
-const HEADER = ['Datum', 'Stanica', 'Adresa', 'Grad', 'Gorivo', 'Litara', 'Cena/L', 'Ukupno (RSD)', 'Kilometraža', 'L/100km', 'Broj računa'];
+const HEADER = ['Datum', 'Nadimak', 'Stanica', 'Adresa', 'Grad', 'Gorivo', 'Litara', 'Cena/L', 'Ukupno (RSD)', 'Kilometraža', 'L/100km', 'Broj računa'];
 
 /**
  * CSV za Excel u srpskom locale-u: separator `;`, decimalni zarez.
  * `consumption` je L/100km po id-u zapisa (vidi `computeConsumption`).
  */
-export function receiptsToCsv(receipts: FuelReceiptRecord[], consumption: Map<string, number>): string {
+export function receiptsToCsv(
+  receipts: FuelReceiptRecord[],
+  consumption: Map<string, number>,
+  nickname: (r: FuelReceiptRecord) => string | null = () => null,
+): string {
   const rows = receipts.map((r) => [
     formatDate(r.date),
+    nickname(r),
     r.station,
     r.address,
     r.city,

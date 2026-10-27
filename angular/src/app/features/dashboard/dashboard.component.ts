@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 
 import { AuthService } from '../../core/services/auth.service';
 import { ReceiptsStore } from '../../core/services/receipts-store.service';
+import { StationNicknamesService } from '../../core/services/station-nicknames.service';
 import { FuelReceiptRecord } from '../../core/models/receipt.model';
 import { computeConsumption, getMonthlyComparison } from '../../core/utils/receipt-stats.utils';
 
@@ -75,9 +76,9 @@ import { computeConsumption, getMonthlyComparison } from '../../core/utils/recei
         } @else {
           <ul class="space-y-2">
             @for (r of recentTransactions(); track r.id) {
-              <li class="bg-surface-card border border-surface-border rounded-xl px-4 py-3 flex items-center justify-between">
-                <div>
-                  <p class="font-medium text-sm">{{ r.station ?? 'Nepoznata stanica' }}</p>
+              <li class="bg-surface-card border border-surface-border rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+                <div class="min-w-0">
+                  <p class="font-medium text-sm break-words">{{ nicknames.forReceipt(r) ?? r.station ?? 'Nepoznata stanica' }}</p>
                   <p class="text-xs text-slate-400">{{ r.date ? (r.date | date: 'd.M.y.') : '—' }} · {{ r.fuel_type ?? '' }}</p>
                 </div>
                 <div class="text-right">
@@ -102,6 +103,7 @@ import { computeConsumption, getMonthlyComparison } from '../../core/utils/recei
 export class DashboardComponent implements OnInit {
   protected readonly auth = inject(AuthService);
   protected readonly store = inject(ReceiptsStore);
+  protected readonly nicknames = inject(StationNicknamesService);
 
   readonly lastReceipt = computed<FuelReceiptRecord | null>(() => this.store.receipts()[0] ?? null);
   readonly monthlyComparison = computed(() => getMonthlyComparison(this.store.receipts()));
@@ -110,5 +112,6 @@ export class DashboardComponent implements OnInit {
 
   ngOnInit(): void {
     this.store.load();
+    this.nicknames.load();
   }
 }

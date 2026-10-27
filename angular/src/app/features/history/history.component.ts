@@ -5,8 +5,9 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FuelReceiptRecord } from '../../core/models/receipt.model';
 import { FuelReceiptsService } from '../../core/services/fuel-receipts.service';
 import { ReceiptsStore } from '../../core/services/receipts-store.service';
+import { StationNicknamesService } from '../../core/services/station-nicknames.service';
 import { ToastService } from '../../core/services/toast.service';
-import { FuelCategory, detectFuel } from '../../core/utils/receipt-parsing.utils';
+import { FuelCategory, detectFuel, formatLocation } from '../../core/utils/receipt-parsing.utils';
 import { StatsPeriod, computeConsumption, filterByPeriod } from '../../core/utils/receipt-stats.utils';
 import { ReceiptFormComponent, ReceiptFormValue } from '../../shared/receipt-form/receipt-form.component';
 import { receiptsToCsv } from './receipts-csv';
@@ -74,8 +75,13 @@ const UNDO_MS = 5000;
             <li class="bg-surface-card border border-surface-border rounded-xl px-4 py-4 space-y-2">
               <div class="flex items-start justify-between gap-2">
                 <div class="min-w-0">
-                  <p class="font-semibold leading-tight truncate">{{ r.station ?? 'Nepoznata stanica' }}</p>
-                  <p class="text-[11px] text-slate-400 mt-0.5 truncate">{{ locationText(r) }}</p>
+                  @if (nicknames.forReceipt(r); as nick) {
+                    <p class="font-semibold leading-tight break-words">{{ nick }}</p>
+                    <p class="text-[11px] text-slate-500 mt-0.5 break-words">{{ r.station }}</p>
+                  } @else {
+                    <p class="font-semibold leading-tight break-words">{{ r.station ?? 'Nepoznata stanica' }}</p>
+                  }
+                  <p class="text-[11px] text-slate-400 mt-0.5 break-words">{{ formatLocation(r) }}</p>
                 </div>
                 <div class="flex items-center gap-1 shrink-0">
                   <span class="text-xs text-fuel-300 bg-fuel-900 px-2 py-0.5 rounded-lg">{{ r.fuel_type ?? '—' }}</span>
@@ -121,7 +127,8 @@ const UNDO_MS = 5000;
         >
           <h3 class="text-lg font-bold mb-3">Izmena zapisa</h3>
           <app-receipt-form
-            [initial]="r"
+            [initial]="editInitial(r)"
+            [showNickname]="true"
             [busy]="saving()"
             submitLabel="Sačuvaj izmene"
             cancelLabel="Otkaži"
@@ -135,11 +142,13 @@ const UNDO_MS = 5000;
 })
 export class HistoryComponent implements OnInit, OnDestroy {
   protected readonly store = inject(ReceiptsStore);
+  protected readonly nicknames = inject(StationNicknamesService);
   private readonly api = inject(FuelReceiptsService);
   private readonly toast = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
 
   readonly pageSize = PAGE_SIZE;
+  readonly formatLocation = formatLocation;
   readonly categoryOptions: { value: FuelCategory | 'all'; label: string }[] = [
     { value: 'all', label: 'Sve' },
     { value: 'Dizel', label: 'Dizel' },
@@ -171,7 +180,7 @@ export class HistoryComponent implements OnInit, OnDestroy {
     return filterByPeriod(this.store.receipts(), this.period()).filter((r) => {
       if (cat !== 'all' && detectFuel(r.fuel_type).category !== cat) return false;
       if (!q) return true;
-      return [r.station, r.city, r.address, r.fuel_type].some((v) => v?.toLowerCase().includes(q));
+      return [this.nicknames.forReceipt(r), r.station, r.city, r.address, r.fuel_type].some((v) => v?.toLowerCase().includes(q));
     });
   });
 
@@ -181,6 +190,11 @@ export class HistoryComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.store.load();
+    this.nicknames.load();
+  }
+
+  editInitial(r: FuelReceiptRecord): Partial<ReceiptFormValue> {
+    return { ...r, nickname: this.nicknames.forReceipt(r) };
   }
 
   ngOnDestroy(): void {
@@ -190,10 +204,6 @@ export class HistoryComponent implements OnInit, OnDestroy {
       this.commitDelete(record);
     }
     this.pendingDeletes.clear();
-  }
-
-  locationText(r: FuelReceiptRecord): string {
-    return [r.address, r.city].filter((v): v is string => !!v).join(', ') || 'Nepoznata lokacija';
   }
 
   deleteWithUndo(record: FuelReceiptRecord): void {
@@ -217,15 +227,20 @@ export class HistoryComponent implements OnInit, OnDestroy {
   }
 
   saveEdit(record: FuelReceiptRecord, value: ReceiptFormValue): void {
+    const { nickname, ...fields } = value;
+    const previousNickname = this.nicknames.forReceipt(record);
     this.saving.set(true);
     this.store
-      .update$(record.id, value)
+      .update$(record.id, fields)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: () => {
+        next: (updated) => {
           this.saving.set(false);
           this.editing.set(null);
           this.toast.show('Izmene su sačuvane.', 'success');
+          // Ključ stanice se čita POSLE izmene - naziv/adresa su možda promenjeni,
+          // pa nedirnut nadimak "prelazi" na novi ključ umesto da se izgubi.
+          this.syncNickname(updated, nickname === undefined ? previousNickname : nickname);
         },
         error: (err: unknown) => {
           this.saving.set(false);
@@ -234,8 +249,17 @@ export class HistoryComponent implements OnInit, OnDestroy {
       });
   }
 
+  /** Nadimak je odvojen od računa: njegova greška ne sme da izgleda kao neuspela izmena računa. */
+  private syncNickname(record: FuelReceiptRecord, nickname: string | null): void {
+    const key = this.store.stationKeys().get(record.id);
+    if (!key || (nickname ?? null) === this.nicknames.get(key)) return;
+    this.nicknames.set$(key, nickname).subscribe({
+      error: () => this.toast.show('Račun je izmenjen, ali nadimak stanice nije sačuvan.', 'warning', 4000),
+    });
+  }
+
   exportCsv(): void {
-    const csv = receiptsToCsv(this.filtered(), this.consumption());
+    const csv = receiptsToCsv(this.filtered(), this.consumption(), (r) => this.nicknames.forReceipt(r));
     // BOM da Excel ispravno prikaže č/ć/š/ž.
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);

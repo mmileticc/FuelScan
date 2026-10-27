@@ -3,6 +3,7 @@ import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/rou
 
 import { AuthService } from './core/services/auth.service';
 import { ReceiptsStore } from './core/services/receipts-store.service';
+import { StationNicknamesService } from './core/services/station-nicknames.service';
 import { ToastService } from './core/services/toast.service';
 
 /**
@@ -22,6 +23,7 @@ export class App {
   protected readonly toastService = inject(ToastService);
   private readonly router = inject(Router);
   private readonly store = inject(ReceiptsStore);
+  private readonly nicknames = inject(StationNicknamesService);
 
   async login(): Promise<void> {
     try {
@@ -35,6 +37,7 @@ export class App {
     try {
       await this.auth.signOut();
       this.store.reset();
+      this.nicknames.reset();
       this.toastService.show('Uspešno ste odjavljeni.', 'success');
       await this.router.navigate(['/welcome']);
     } catch (err) {

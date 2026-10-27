@@ -1,5 +1,6 @@
 import { FuelReceiptRecord } from '../models/receipt.model';
 import { FuelCategory, detectFuel } from './receipt-parsing.utils';
+import { groupByStation } from './stations.utils';
 
 export interface MonthlyDiff {
   text: string;
@@ -203,31 +204,32 @@ export function avgPriceByCategory(receipts: FuelReceiptRecord[]): CategoryPrice
 }
 
 export interface StationStat {
+  key: string;
   station: string;
+  address: string | null;
+  city: string | null;
   avgPrice: number;
   count: number;
   total: number;
 }
 
-/** Poređenje stanica: prosečna cena/L i broj točenja, najčešće stanice prve. */
+/**
+ * Poređenje stanica: prosečna cena/L (ponderisano litrima, sve vrste goriva)
+ * i broj točenja, najčešće stanice prve. Grupisanje je isto kao na ekranu
+ * Stanice (`groupByStation`) - bez duplikata zbog razmaka, velikih slova ili ćirilice.
+ */
 export function stationComparison(receipts: FuelReceiptRecord[], limit = 5): StationStat[] {
-  const acc = new Map<string, { priceSum: number; priced: number; count: number; total: number }>();
-  for (const r of receipts) {
-    if (!r.station) continue;
-    const key = r.station.trim();
-    const entry = acc.get(key) ?? { priceSum: 0, priced: 0, count: 0, total: 0 };
-    const price = Number(r.price_per_l) || 0;
-    if (price > 0) {
-      entry.priceSum += price;
-      entry.priced += 1;
-    }
-    entry.count += 1;
-    entry.total += Number(r.total) || 0;
-    acc.set(key, entry);
-  }
-  return [...acc.entries()]
-    .filter(([, e]) => e.priced > 0)
-    .map(([station, e]) => ({ station, avgPrice: e.priceSum / e.priced, count: e.count, total: e.total }))
+  return groupByStation(receipts)
+    .filter((s) => s.categories.length > 0)
+    .map((s) => {
+      const points = s.categories.flatMap((c) => c.history);
+      const liters = points.reduce((sum, p) => sum + p.liters, 0);
+      const avgPrice =
+        liters > 0
+          ? points.reduce((sum, p) => sum + p.price * p.liters, 0) / liters
+          : points.reduce((sum, p) => sum + p.price, 0) / points.length;
+      return { key: s.key, station: s.name, address: s.address, city: s.city, avgPrice, count: s.count, total: s.total };
+    })
     .sort((a, b) => b.count - a.count || a.avgPrice - b.avgPrice)
     .slice(0, limit);
 }

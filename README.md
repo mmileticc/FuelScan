@@ -60,7 +60,9 @@ Pre prvog deploy-a ove verzije pokreni `supabase/migration-2026-10.sql` u **Supa
 - dodaje UNIQUE indeks `(user_id, invoice_number)` - isti račun se ne može sačuvati dvaput,
 - uključuje **Row Level Security** sa politikama „samo svoji redovi“ (select/insert/update/delete).
 
-Na kraju ispisuje sve politike na tabeli - ako postoji neka stara politika sa uslovom `true`, obriši je (Authentication → Policies).
+Za nadimke stanica pokreni i `supabase/migration-2026-10-nicknames.sql` (tabela `station_nicknames`, sa istim RLS pravilima). Nadimak je vezan za stanicu (normalizovan naziv + adresa), pa ga dobijaju svi njeni računi; postavlja se na pregledu posle skeniranja, pri izmeni računa u Istoriji ili na ekranu Stanice. Bez ove tabele aplikacija radi normalno, samo bez nadimaka.
+
+Na kraju prva migracija ispisuje sve politike na tabeli - ako postoji neka stara politika sa uslovom `true`, obriši je (Authentication → Policies).
 
 ## Lokalni development
 

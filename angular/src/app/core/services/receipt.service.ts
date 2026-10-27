@@ -5,6 +5,7 @@ import { catchError, delay, map, retry, switchMap } from 'rxjs/operators';
 
 import { CORS_PROXY_URL, SUF_ALLOWED_HOST, TAX_AUTHORITY_SPECIFICATIONS_URL } from '../config/app-config';
 import {
+  FuelReceiptRecord,
   FuelReceiptRow,
   ParsedReceipt,
   RECEIPT_META_SELECTORS,
@@ -142,7 +143,7 @@ export class ReceiptService {
    * Upis na zahtev korisnika (dugme "Sačuvaj"). Pre upisa se proverava da li
    * je isti račun već sačuvan (po broju računa ili URL-u sa QR koda).
    */
-  saveReceipt$(receipt: ParsedReceipt): Observable<true> {
+  saveReceipt$(receipt: ParsedReceipt): Observable<FuelReceiptRecord> {
     return this.api.isDuplicate$(receipt.invoice_number, receipt.raw_url).pipe(
       switchMap((duplicate) => {
         if (duplicate) {
@@ -307,7 +308,7 @@ export class ReceiptService {
   }
 
   /** 5. Upis u Supabase `fuel_receipts` tabelu (preko zajedničkog store-a, da se ekrani odmah osveže). */
-  private saveReceiptToSupabase$(receipt: ParsedReceipt): Observable<true> {
+  private saveReceiptToSupabase$(receipt: ParsedReceipt): Observable<FuelReceiptRecord> {
     return from(supabaseClient.auth.getUser()).pipe(
       switchMap(({ data, error: authError }) => {
         if (authError || !data.user) {
@@ -332,7 +333,6 @@ export class ReceiptService {
 
         return this.store.insert$(row);
       }),
-      map(() => true as const),
     );
   }
 }

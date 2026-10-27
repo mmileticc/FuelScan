@@ -1,8 +1,10 @@
 import { Component, ElementRef, Injector, OnDestroy, OnInit, afterNextRender, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { Chart, ChartConfiguration, registerables } from 'chart.js';
 
 import { ReceiptsStore } from '../../core/services/receipts-store.service';
+import { StationNicknamesService } from '../../core/services/station-nicknames.service';
 import {
   StatsPeriod,
   avgPriceByCategory,
@@ -30,7 +32,7 @@ const TOOLTIP = {
 @Component({
   selector: 'app-statistics',
   standalone: true,
-  imports: [DecimalPipe],
+  imports: [DecimalPipe, RouterLink],
   template: `
     <section class="px-4 pt-6 pb-28 space-y-6">
       <h2 class="text-xl font-bold">Analitika potrošnje</h2>
@@ -78,7 +80,7 @@ const TOOLTIP = {
         <div class="bg-surface-card border border-surface-border rounded-xl p-4 flex flex-col justify-between min-h-[100px]">
           <div>
             <p class="text-[10px] text-emerald-400 uppercase tracking-wider font-semibold mb-1">Najjeftinije gorivo</p>
-            <p class="text-base font-bold truncate" [title]="stats().cheapest?.station ?? ''">{{ stats().cheapest?.station ?? 'Nema podataka' }}</p>
+            <p class="text-base font-bold leading-snug break-words">{{ stats().cheapest ? (nicknames.forReceipt(stats().cheapest!) ?? stats().cheapest!.station) : 'Nema podataka' }}</p>
           </div>
           <p class="text-sm font-semibold font-mono text-slate-300 mt-2">
             {{ stats().cheapest ? (stats().cheapest!.price_per_l | number: '1.2-2') + ' RSD/L' : '—' }}
@@ -87,7 +89,7 @@ const TOOLTIP = {
         <div class="bg-surface-card border border-surface-border rounded-xl p-4 flex flex-col justify-between min-h-[100px]">
           <div>
             <p class="text-[10px] text-red-400 uppercase tracking-wider font-semibold mb-1">Najskuplje gorivo</p>
-            <p class="text-base font-bold truncate" [title]="stats().expensive?.station ?? ''">{{ stats().expensive?.station ?? 'Nema podataka' }}</p>
+            <p class="text-base font-bold leading-snug break-words">{{ stats().expensive ? (nicknames.forReceipt(stats().expensive!) ?? stats().expensive!.station) : 'Nema podataka' }}</p>
           </div>
           <p class="text-sm font-semibold font-mono text-slate-300 mt-2">
             {{ stats().expensive ? (stats().expensive!.price_per_l | number: '1.2-2') + ' RSD/L' : '—' }}
@@ -120,12 +122,18 @@ const TOOLTIP = {
       @if (stations().length) {
         <div class="bg-surface-card border border-surface-border rounded-2xl p-4 space-y-2">
           <p class="stat-label">Najčešće stanice</p>
-          @for (s of stations(); track s.station) {
+          @for (s of stations(); track s.key) {
             <div class="flex justify-between gap-3 text-sm">
-              <span class="truncate">{{ s.station }} <span class="text-slate-500 text-xs">×{{ s.count }}</span></span>
+              <div class="min-w-0">
+                <p class="leading-snug break-words">{{ nicknames.get(s.key) ?? s.station }} <span class="text-slate-500 text-xs">×{{ s.count }}</span></p>
+                @if (s.address || s.city) {
+                  <p class="text-[11px] text-slate-500 break-words">{{ s.address }}{{ s.address && s.city ? ', ' : '' }}{{ s.city }}</p>
+                }
+              </div>
               <span class="font-mono shrink-0">{{ s.avgPrice | number: '1.2-2' }} RSD/L</span>
             </div>
           }
+          <a routerLink="/stations" class="block text-xs text-fuel-400 hover:text-fuel-300 pt-1">Sve stanice i cene →</a>
         </div>
       }
     </section>
@@ -133,6 +141,7 @@ const TOOLTIP = {
 })
 export class StatisticsComponent implements OnInit, OnDestroy {
   private readonly store = inject(ReceiptsStore);
+  protected readonly nicknames = inject(StationNicknamesService);
   private readonly injector = inject(Injector);
 
   private readonly priceCanvas = viewChild<ElementRef<HTMLCanvasElement>>('priceCanvas');
@@ -158,6 +167,7 @@ export class StatisticsComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.store.load();
+    this.nicknames.load();
     // Grafikoni se crtaju tek kad canvas postoji, i ponovo pri svakoj promeni podataka/perioda.
     afterNextRender(
       () => {
@@ -210,7 +220,8 @@ export class StatisticsComponent implements OnInit, OnDestroy {
             callbacks: {
               label: (context) => {
                 const item = data[context.dataIndex];
-                return [`Cena: ${Number(context.parsed.y).toFixed(2)} RSD/L`, `Pumpa: ${item?.station ?? ''}`];
+                const station = item ? (this.nicknames.forReceipt(item) ?? item.station ?? '') : '';
+                return [`Cena: ${Number(context.parsed.y).toFixed(2)} RSD/L`, `Pumpa: ${station}`];
               },
             },
           },
