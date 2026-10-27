@@ -2,25 +2,38 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, tap } from 'rxjs';
 
 import { FuelReceiptRecord, FuelReceiptRow } from '../models/receipt.model';
+import { OFFLINE_MESSAGE, friendlyError, isNetworkError } from '../utils/errors.utils';
 import { stationKeyMap } from '../utils/stations.utils';
+import { AuthService } from './auth.service';
 import { FuelReceiptPatch, FuelReceiptsService } from './fuel-receipts.service';
 import { ToastService } from './toast.service';
+
+/** Brisanja koja čekaju istek roka za "Poništi" - preživljavaju i zatvaranje aplikacije. */
+const PENDING_DELETES_KEY = 'fuelscan.pendingDeletes';
+
+interface PendingDelete {
+  id: string;
+  /** Čiji je zapis - brisanje se završava samo kad je prijavljen isti korisnik. */
+  userId?: string;
+}
 
 /**
  * Jedan, zajednički keš računa za dashboard, istoriju i statistiku - umesto da
  * svaki ekran posebno vuče celu tabelu iz Supabase-a pri svakom ulasku.
  */
-/** Brisanja koja čekaju istek roka za "Poništi" - preživljavaju i zatvaranje aplikacije. */
-const PENDING_DELETES_KEY = 'fuelscan.pendingDeletes';
-
 @Injectable({ providedIn: 'root' })
 export class ReceiptsStore {
   private readonly api = inject(FuelReceiptsService);
   private readonly toast = inject(ToastService);
+  private readonly auth = inject(AuthService);
 
   private readonly _receipts = signal<FuelReceiptRecord[]>([]);
   private readonly _loading = signal(false);
   private loaded = false;
+  /** Neki ekran je tražio podatke (od poslednje odjave) - samo tada se osvežava kad se veza vrati. */
+  private wanted = false;
+  /** Poruka "nema interneta" se prikazuje jednom po prekidu veze, ne na svakom ekranu. */
+  private offlineNotified = false;
   /** Lokalne izmene napravljene dok `load()` čeka odgovor - primenjuju se i na pristigle podatke. */
   private pendingOps: Array<(list: FuelReceiptRecord[]) => FuelReceiptRecord[]> = [];
   private readonly scheduledDeletes = new Map<string, { timer: ReturnType<typeof setTimeout>; record: FuelReceiptRecord }>();
@@ -29,6 +42,11 @@ export class ReceiptsStore {
     // Aplikacija se zatvara usred roka za "Poništi" -> pokušaj brisanje odmah;
     // ako ni to ne stigne, id ostaje zapamćen i briše se pri sledećem učitavanju.
     window.addEventListener('pagehide', () => this.flushScheduledDeletes());
+    // Veza se vratila - osveži podatke bez čekanja da korisnik promeni ekran.
+    window.addEventListener('online', () => {
+      this.offlineNotified = false;
+      if (this.wanted) this.load(true);
+    });
   }
 
   /** Sortirano po datumu, najnoviji prvi. */
@@ -40,6 +58,7 @@ export class ReceiptsStore {
 
   /** Učitava jednom; `force` ponovo vuče iz baze. */
   load(force = false): void {
+    this.wanted = true;
     if ((this.loaded && !force) || this._loading()) {
       return;
     }
@@ -48,7 +67,7 @@ export class ReceiptsStore {
       next: (data) => {
         const ops = this.pendingOps;
         this.pendingOps = [];
-        const leftover = this.leftoverDeletes();
+        const leftover = this.leftoverDeletes().map((d) => d.id);
         this._receipts.set(ops.reduce((list, op) => op(list), data).filter((r) => !leftover.includes(r.id)));
         this.finishLeftoverDeletes(leftover);
         this.loaded = true;
@@ -57,7 +76,14 @@ export class ReceiptsStore {
       error: (err: unknown) => {
         this.pendingOps = [];
         this._loading.set(false);
-        this.toast.show(err instanceof Error ? err.message : 'Greška pri učitavanju podataka.', 'error');
+        if (isNetworkError(err)) {
+          if (!this.offlineNotified) {
+            this.offlineNotified = true;
+            this.toast.show(OFFLINE_MESSAGE, 'warning');
+          }
+          return;
+        }
+        this.toast.show(friendlyError(err, 'učitavanju podataka'), 'error');
       },
     });
   }
@@ -67,6 +93,7 @@ export class ReceiptsStore {
     this.pendingOps = [];
     this._receipts.set([]);
     this.loaded = false;
+    this.wanted = false;
   }
 
   insert$(row: FuelReceiptRow): Observable<FuelReceiptRecord> {
@@ -87,7 +114,7 @@ export class ReceiptsStore {
    */
   scheduleDelete(record: FuelReceiptRecord, delayMs: number): () => void {
     this.removeLocal(record.id);
-    this.persistDeletes([...this.leftoverDeletes(), record.id]);
+    this.persistDeletes([...this.allPendingDeletes(), { id: record.id, userId: this.auth.currentUser()?.id }]);
     const timer = setTimeout(() => this.commitDelete(record.id), delayMs);
     this.scheduledDeletes.set(record.id, { timer, record });
 
@@ -101,7 +128,8 @@ export class ReceiptsStore {
     };
   }
 
-  private flushScheduledDeletes(): void {
+  /** Odmah izvršava brisanja koja čekaju rok (zatvaranje aplikacije, odjava). */
+  flushScheduledDeletes(): void {
     for (const [id, { timer }] of this.scheduledDeletes) {
       clearTimeout(timer);
       this.commitDelete(id);
@@ -114,9 +142,11 @@ export class ReceiptsStore {
     this.api.deleteReceipt$(id).subscribe({
       next: () => this.forgetDelete(id),
       error: (err: unknown) => {
+        // Bez mreže: id ostaje zapamćen i brisanje se završava pri sledećem učitavanju.
+        if (isNetworkError(err)) return;
         this.forgetDelete(id);
         if (record) this.upsertLocal(record);
-        this.toast.show(err instanceof Error ? `Greška pri brisanju: ${err.message}` : 'Greška pri brisanju.', 'error');
+        this.toast.show(friendlyError(err, 'brisanju'), 'error');
       },
     });
   }
@@ -130,25 +160,37 @@ export class ReceiptsStore {
     }
   }
 
-  private leftoverDeletes(): string[] {
+  /** Zapamćena brisanja TRENUTNOG korisnika (stari zapisi bez `userId` se tretiraju kao njegovi). */
+  private leftoverDeletes(): PendingDelete[] {
+    const userId = this.auth.currentUser()?.id;
+    return this.allPendingDeletes().filter((d) => !d.userId || d.userId === userId);
+  }
+
+  private allPendingDeletes(): PendingDelete[] {
     try {
       const parsed: unknown = JSON.parse(localStorage.getItem(PENDING_DELETES_KEY) ?? '[]');
-      return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .map((v): PendingDelete | null =>
+          typeof v === 'string' ? { id: v } : v && typeof v.id === 'string' ? { id: v.id, userId: v.userId } : null,
+        )
+        .filter((v): v is PendingDelete => v !== null);
     } catch {
       return [];
     }
   }
 
-  private persistDeletes(ids: string[]): void {
+  private persistDeletes(list: PendingDelete[]): void {
+    const unique = [...new Map(list.map((d) => [d.id, d])).values()];
     try {
-      localStorage.setItem(PENDING_DELETES_KEY, JSON.stringify([...new Set(ids)]));
+      localStorage.setItem(PENDING_DELETES_KEY, JSON.stringify(unique));
     } catch {
       // Bez storage-a brisanje i dalje radi, samo ne preživljava zatvaranje aplikacije.
     }
   }
 
   private forgetDelete(id: string): void {
-    this.persistDeletes(this.leftoverDeletes().filter((v) => v !== id));
+    this.persistDeletes(this.allPendingDeletes().filter((d) => d.id !== id));
   }
 
   /** Lokalno sklanjanje bez poziva baze. */

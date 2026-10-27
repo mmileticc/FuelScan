@@ -318,7 +318,6 @@ export class ReceiptService {
         const row: FuelReceiptRow = {
           user_id: data.user.id,
           invoice_number: receipt.invoice_number,
-          odometer_km: receipt.odometer_km ?? null,
           station: receipt.station,
           fuel_type: receipt.fuel_type,
           liters: receipt.liters,

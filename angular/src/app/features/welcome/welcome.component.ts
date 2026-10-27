@@ -2,6 +2,7 @@ import { Component, inject } from '@angular/core';
 
 import { AuthService } from '../../core/services/auth.service';
 import { ToastService } from '../../core/services/toast.service';
+import { friendlyError } from '../../core/utils/errors.utils';
 
 /** Rekonstrukcija `#screen-welcome` iz `old-vanilla/index.html`. */
 @Component({
@@ -74,7 +75,7 @@ export class WelcomeComponent {
     try {
       await this.auth.signInWithGoogle();
     } catch (err) {
-      this.toast.show(err instanceof Error ? err.message : 'Greška pri prijavi.', 'error');
+      this.toast.show(friendlyError(err, 'prijavi'), 'error');
     }
   }
 }

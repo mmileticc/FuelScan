@@ -13,7 +13,6 @@ export interface ReceiptFormValue {
   price_per_l: number | null;
   total: number | null;
   date: string | null;
-  odometer_km: number | null;
   /**
    * Nadimak STANICE (važi za sve njene račune). `undefined` = korisnik ga nije
    * menjao; `null` = obrisan. Samo kad je `showNickname`.
@@ -96,20 +95,6 @@ type NumberField = 'liters' | 'price_per_l' | 'total';
         </label>
       </div>
 
-      <label class="block">
-        <span class="field-label">Kilometraža (opciono)</span>
-        <input
-          formControlName="odometer_km"
-          type="number"
-          inputmode="numeric"
-          step="1"
-          min="0"
-          class="field-input font-mono"
-          placeholder="npr. 125400"
-        />
-        <span class="block text-[10px] text-slate-500 mt-1">Stanje km-sata - koristi se za potrošnju L/100km.</span>
-      </label>
-
       <div class="flex gap-3 pt-1">
         <button
           type="button"
@@ -152,7 +137,6 @@ export class ReceiptFormComponent implements OnInit {
     liters: new FormControl<number | null>(null, [Validators.required, Validators.min(0.01)]),
     price_per_l: new FormControl<number | null>(null, [Validators.min(0)]),
     total: new FormControl<number | null>(null, [Validators.required, Validators.min(0.01)]),
-    odometer_km: new FormControl<number | null>(null, [Validators.min(0)]),
     nickname: new FormControl<string>('', { nonNullable: true }),
   });
 
@@ -171,7 +155,6 @@ export class ReceiptFormComponent implements OnInit {
         liters: init.liters ?? null,
         price_per_l: init.price_per_l ?? null,
         total: init.total ?? null,
-        odometer_km: init.odometer_km ?? null,
         nickname: init.nickname ?? '',
       });
     } else {
@@ -213,7 +196,6 @@ export class ReceiptFormComponent implements OnInit {
       price_per_l: roundTo2(num(v.price_per_l)),
       total: roundTo2(num(v.total)),
       date: fromDateTimeLocal(v.date),
-      odometer_km: num(v.odometer_km) === null ? null : Math.round(v.odometer_km as number),
       // Nadimak se šalje SAMO ako ga je korisnik dirao - prazno, nedirnuto polje
       // (npr. ručni unos za stanicu koja već ima nadimak) ne sme da ga obriše.
       ...(this.showNickname() && this.form.controls.nickname.dirty ? { nickname: text(v.nickname) } : {}),

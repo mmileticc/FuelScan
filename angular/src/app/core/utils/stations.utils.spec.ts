@@ -7,7 +7,6 @@ function receipt(partial: Partial<FuelReceiptRecord>): FuelReceiptRecord {
     id: String(nextId++),
     user_id: 'u1',
     invoice_number: null,
-    odometer_km: null,
     station: 'SPOONIT DOO BENZINSKA STANICA',
     fuel_type: 'EVRO DIZEL',
     liters: 40,

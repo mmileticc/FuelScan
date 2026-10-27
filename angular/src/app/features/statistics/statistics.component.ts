@@ -21,7 +21,6 @@ import { StationNicknamesService } from '../../core/services/station-nicknames.s
 import {
   StatsPeriod,
   avgPriceByCategory,
-  computeConsumption,
   computeStatistics,
   filterByPeriod,
   monthlySpending,
@@ -42,7 +41,7 @@ const TOOLTIP = {
   displayColors: false,
 };
 
-/** Statistika: zbirovi za period, potrošnja L/100km, cene po gorivu i stanici, grafikoni. */
+/** Statistika: zbirovi za period, cene po gorivu i stanici, grafikoni. */
 @Component({
   selector: 'app-statistics',
   standalone: true,
@@ -58,6 +57,7 @@ const TOOLTIP = {
             (click)="period.set(p.value)"
             class="flex-1 text-xs font-medium py-2 rounded-lg transition-all"
             [class.bg-fuel-600]="period() === p.value"
+            [attr.aria-pressed]="period() === p.value"
             [class.text-white]="period() === p.value"
             [class.text-slate-400]="period() !== p.value"
           >
@@ -75,25 +75,12 @@ const TOOLTIP = {
           <p class="stat-label">Sipano u periodu</p>
           <p class="text-xl font-black font-mono">{{ stats().periodLiters | number: '1.0-1' }} L</p>
         </div>
-        <div class="stat-tile col-span-2 flex items-center justify-between">
-          <div>
-            <p class="stat-label">Prosečna potrošnja</p>
-            @if (consumption().average !== null) {
-              <p class="text-xl font-black font-mono">{{ consumption().average | number: '1.1-1' }} L/100km</p>
-            } @else {
-              <p class="text-xs text-slate-400">Unesite kilometražu na bar dva uzastopna točenja.</p>
-            }
-          </div>
-          @if (consumption().points.length) {
-            <p class="text-[10px] text-slate-500 text-right">{{ consumption().points.length }} deonica<br />{{ consumptionKm() | number: '1.0-0' }} km</p>
-          }
-        </div>
       </div>
 
       @if (stats().categories.length > 1) {
         <div class="flex flex-wrap gap-2 -mb-3">
           @for (c of stats().categories; track c) {
-            <button type="button" class="chip" [class.chip-active]="stats().category === c" (click)="fuelCategory.set(c)">{{ c }}</button>
+            <button type="button" class="chip" [class.chip-active]="stats().category === c" [attr.aria-pressed]="stats().category === c" (click)="fuelCategory.set(c)">{{ c }}</button>
           }
         </div>
       }
@@ -183,8 +170,6 @@ export class StatisticsComponent implements OnInit, OnDestroy {
   private readonly inPeriod = computed(() => filterByPeriod(this.store.receipts(), this.period()));
 
   readonly stats = computed(() => computeStatistics(this.store.receipts(), this.period(), new Date(), this.fuelCategory()));
-  readonly consumption = computed(() => computeConsumption(this.inPeriod()));
-  readonly consumptionKm = computed(() => this.consumption().points.reduce((s, p) => s + p.km, 0));
   readonly categories = computed(() => avgPriceByCategory(this.inPeriod()));
   readonly stations = computed(() => stationComparison(this.inPeriod()));
   readonly monthly = computed(() => monthlySpending(this.store.receipts(), this.period() === 'month' ? 3 : 12));

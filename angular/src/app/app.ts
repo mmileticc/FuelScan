@@ -8,6 +8,7 @@ import { AuthService } from './core/services/auth.service';
 import { ReceiptsStore } from './core/services/receipts-store.service';
 import { StationNicknamesService } from './core/services/station-nicknames.service';
 import { ToastService } from './core/services/toast.service';
+import { friendlyError } from './core/utils/errors.utils';
 
 /**
  * Root shell - ekvivalent statičnog dela `old-vanilla/index.html`
@@ -65,19 +66,21 @@ export class App {
     try {
       await this.auth.signInWithGoogle();
     } catch (err) {
-      this.toastService.show(err instanceof Error ? err.message : 'Greška pri prijavi.', 'error');
+      this.toastService.show(friendlyError(err, 'prijavi'), 'error');
     }
   }
 
   async logout(): Promise<void> {
     try {
+      // Brisanja koja čekaju rok za "Poništi" moraju da se izvrše dok je sesija još važeća.
+      this.store.flushScheduledDeletes();
       await this.auth.signOut();
       this.store.reset();
       this.nicknames.reset();
       this.toastService.show('Uspešno ste odjavljeni.', 'success');
       await this.router.navigate(['/welcome']);
     } catch (err) {
-      this.toastService.show(err instanceof Error ? err.message : 'Greška pri odjavi.', 'error');
+      this.toastService.show(friendlyError(err, 'odjavi'), 'error');
     }
   }
 }

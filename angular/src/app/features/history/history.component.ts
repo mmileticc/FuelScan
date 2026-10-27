@@ -6,8 +6,9 @@ import { FuelReceiptRecord } from '../../core/models/receipt.model';
 import { ReceiptsStore } from '../../core/services/receipts-store.service';
 import { StationNicknamesService } from '../../core/services/station-nicknames.service';
 import { ToastService } from '../../core/services/toast.service';
+import { friendlyError } from '../../core/utils/errors.utils';
 import { FuelCategory, detectFuel, formatLocation } from '../../core/utils/receipt-parsing.utils';
-import { StatsPeriod, computeConsumption, filterByPeriod } from '../../core/utils/receipt-stats.utils';
+import { StatsPeriod, filterByPeriod } from '../../core/utils/receipt-stats.utils';
 import { ReceiptFormComponent, ReceiptFormValue } from '../../shared/receipt-form/receipt-form.component';
 import { receiptsToCsv } from './receipts-csv';
 
@@ -47,13 +48,13 @@ const UNDO_MS = 5000;
 
       <div class="flex flex-wrap gap-2">
         @for (c of categoryOptions; track c.value) {
-          <button type="button" class="chip" [class.chip-active]="category() === c.value" (click)="category.set(c.value); visible.set(pageSize)">
+          <button type="button" class="chip" [class.chip-active]="category() === c.value" [attr.aria-pressed]="category() === c.value" (click)="category.set(c.value); visible.set(pageSize)">
             {{ c.label }}
           </button>
         }
         <span class="w-px bg-slate-700 mx-1"></span>
         @for (p of periodOptions; track p.value) {
-          <button type="button" class="chip" [class.chip-active]="period() === p.value" (click)="period.set(p.value); visible.set(pageSize)">
+          <button type="button" class="chip" [class.chip-active]="period() === p.value" [attr.aria-pressed]="period() === p.value" (click)="period.set(p.value); visible.set(pageSize)">
             {{ p.label }}
           </button>
         }
@@ -92,16 +93,9 @@ const UNDO_MS = 5000;
                 <span class="text-slate-400 text-xs">{{ r.date ? (r.date | date: 'd.M.y. HH:mm') : '—' }}</span>
                 <span class="font-mono text-fuel-400 font-semibold">{{ r.total ? (r.total | number: '1.0-0') + ' RSD' : '—' }}</span>
               </div>
-              <div class="grid grid-cols-3 gap-2 pt-1.5 border-t border-surface-border text-xs text-slate-400">
+              <div class="grid grid-cols-2 gap-2 pt-1.5 border-t border-surface-border text-xs text-slate-400">
                 <span>Litara: <strong class="text-slate-200">{{ r.liters ? (r.liters | number: '1.2-2') : '—' }}</strong></span>
                 <span>Cena/L: <strong class="text-slate-200">{{ r.price_per_l ? (r.price_per_l | number: '1.2-2') : '—' }}</strong></span>
-                <span>
-                  @if (consumption().get(r.id); as l100) {
-                    <strong class="text-slate-200">{{ l100 | number: '1.1-1' }}</strong> L/100km
-                  } @else if (r.odometer_km) {
-                    <strong class="text-slate-200">{{ r.odometer_km | number: '1.0-0' }}</strong> km
-                  }
-                </span>
               </div>
             </li>
           }
@@ -168,7 +162,6 @@ export class HistoryComponent implements OnInit {
   readonly saving = signal(false);
 
 
-  readonly consumption = computed(() => computeConsumption(this.store.receipts()).byId);
 
   readonly filtered = computed(() => {
     const q = this.query().trim().toLowerCase();
@@ -217,7 +210,7 @@ export class HistoryComponent implements OnInit {
         },
         error: (err: unknown) => {
           this.saving.set(false);
-          this.toast.show(err instanceof Error ? `Greška pri čuvanju: ${err.message}` : 'Greška pri čuvanju.', 'error');
+          this.toast.show(friendlyError(err, 'čuvanju izmena'), 'error');
         },
       });
   }
@@ -232,7 +225,7 @@ export class HistoryComponent implements OnInit {
   }
 
   exportCsv(): void {
-    const csv = receiptsToCsv(this.filtered(), this.consumption(), (r) => this.nicknames.forReceipt(r));
+    const csv = receiptsToCsv(this.filtered(), (r) => this.nicknames.forReceipt(r));
     // BOM da Excel ispravno prikaže č/ć/š/ž.
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);

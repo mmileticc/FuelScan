@@ -25,7 +25,16 @@ export class ToastService {
   private counter = 0;
   private timer?: ReturnType<typeof setTimeout>;
 
-  show(message: string, type: ToastType = 'info', duration = 3000, action?: ToastAction): void {
+  /** Podrazumevano trajanje po tipu - grešku treba stići pročitati. */
+  private static readonly DEFAULT_DURATION: Record<ToastType, number> = {
+    info: 3000,
+    success: 3000,
+    warning: 5000,
+    error: 6000,
+  };
+
+  show(message: string, type: ToastType = 'info', duration?: number, action?: ToastAction): void {
+    duration ??= ToastService.DEFAULT_DURATION[type];
     clearTimeout(this.timer);
 
     const id = ++this.counter;

@@ -15,17 +15,13 @@ export type FuelReceiptPatch = Partial<Omit<FuelReceiptRow, 'user_id'>>;
 /** Supabase CRUD nad tabelom `fuel_receipts` (RLS u bazi ograničava sve upite na ulogovanog korisnika). */
 @Injectable({ providedIn: 'root' })
 export class FuelReceiptsService {
+  /**
+   * Svi računi korisnika. Supabase vraća najviše 1000 redova po upitu, pa se
+   * čita po stranama - inače bi posle 1000 računa istorija i statistika tiho
+   * bile nepotpune.
+   */
   fetchUserReceipts$(): Observable<FuelReceiptRecord[]> {
-    return from(
-      supabaseClient.from('fuel_receipts').select('*').order('date', { ascending: false }),
-    ).pipe(
-      map(({ data, error }) => {
-        if (error) {
-          throw error;
-        }
-        return (data ?? []) as FuelReceiptRecord[];
-      }),
-    );
+    return from(fetchAllPages());
   }
 
   /**
@@ -81,6 +77,29 @@ export class FuelReceiptsService {
         return true as const;
       }),
     );
+  }
+}
+
+const PAGE_SIZE = 1000;
+
+async function fetchAllPages(): Promise<FuelReceiptRecord[]> {
+  const all: FuelReceiptRecord[] = [];
+  for (let offset = 0; ; offset += PAGE_SIZE) {
+    const { data, error } = await supabaseClient
+      .from('fuel_receipts')
+      .select('*')
+      // `id` kao drugi ključ: stabilan redosled i kad više računa ima isti datum.
+      .order('date', { ascending: false })
+      .order('id', { ascending: true })
+      .range(offset, offset + PAGE_SIZE - 1);
+    if (error) {
+      throw error;
+    }
+    const page = (data ?? []) as FuelReceiptRecord[];
+    all.push(...page);
+    if (page.length < PAGE_SIZE) {
+      return all;
+    }
   }
 }
 

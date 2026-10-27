@@ -6,9 +6,9 @@ import { AuthService } from '../../core/services/auth.service';
 import { ReceiptsStore } from '../../core/services/receipts-store.service';
 import { StationNicknamesService } from '../../core/services/station-nicknames.service';
 import { FuelReceiptRecord } from '../../core/models/receipt.model';
-import { computeConsumption, getMonthlyComparison } from '../../core/utils/receipt-stats.utils';
+import { getMonthlyComparison } from '../../core/utils/receipt-stats.utils';
 
-/** Početni ekran: poslednje točenje, ovaj vs. prošli kalendarski mesec, potrošnja, poslednje transakcije. */
+/** Početni ekran: poslednje točenje, ovaj vs. prošli kalendarski mesec, poslednje transakcije. */
 @Component({
   selector: 'app-dashboard',
   standalone: true,
@@ -54,13 +54,6 @@ import { computeConsumption, getMonthlyComparison } from '../../core/utils/recei
             {{ monthlyComparison().liters.text }}
           </p>
         </div>
-
-        @if (averageConsumption() !== null) {
-          <div class="col-span-2 bg-surface-card border border-surface-border rounded-xl p-4 flex items-center justify-between">
-            <p class="text-[10px] text-slate-400 uppercase tracking-wider">Prosečna potrošnja</p>
-            <p class="text-xl font-bold font-mono">{{ averageConsumption() | number: '1.1-1' }} <span class="text-sm text-slate-400">L/100km</span></p>
-          </div>
-        }
       </div>
 
       <div>
@@ -108,7 +101,6 @@ export class DashboardComponent implements OnInit {
   readonly lastReceipt = computed<FuelReceiptRecord | null>(() => this.store.receipts()[0] ?? null);
   readonly monthlyComparison = computed(() => getMonthlyComparison(this.store.receipts()));
   readonly recentTransactions = computed(() => this.store.receipts().slice(0, 3));
-  readonly averageConsumption = computed(() => computeConsumption(this.store.receipts()).average);
 
   ngOnInit(): void {
     this.store.load();

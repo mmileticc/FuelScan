@@ -25,7 +25,7 @@ Novi tok radi sve u browseru, bez ikakvog sopstvenog backend servera:
 2. Angular (`ReceiptService`) GET-uje HTML te stranice preko CORS proxy-ja (Cloudflare Worker u `cors-proxy/`), jer `suf.purs.gov.rs` ne šalje CORS zaglavlja potrebna za direktan poziv iz browsera.
 3. `DOMParser` u browseru parsira taj HTML: iz inline `<script>` bloka regex-om izvlači `token`/`invoiceNumber`, a meta podatke (stanica, adresa, datum, ukupno) čita preko istih ID selektora koje je koristio stari Playwright parser.
 4. Angular odmah POST-uje (opet preko istog proxy-ja) na `https://suf.purs.gov.rs/specifications` sa `{ invoiceNumber, token }` - isti zahtev koji stranica interno šalje na klik.
-5. Rezultat se prikazuje korisniku NA PREGLED u formi koja se može menjati (stanica, gorivo, litri, cena, ukupno, datum, opciono kilometraža) - korisnik bira **Sačuvaj** (upisuje se u Supabase, uz proveru duplikata) ili **Odbaci**.
+5. Rezultat se prikazuje korisniku NA PREGLED u formi koja se može menjati (stanica, gorivo, litri, cena, ukupno, datum) - korisnik bira **Sačuvaj** (upisuje se u Supabase, uz proveru duplikata) ili **Odbaci**.
 6. Nakon prijave (Google OAuth preko Supabase), istorija, statistika i dashboard čitaju podatke direktno iz Supabase baze (`fuel_receipts` tabela).
 
 ### Zašto proxy postoji i kako čuva sesiju
@@ -56,7 +56,7 @@ Worker takođe prosleđuje **stvarni** `User-Agent`/`Accept-Language`/`Accept` i
 
 Pre prvog deploy-a ove verzije pokreni `supabase/migration-2026-10.sql` u **Supabase → SQL Editor**. Migracija:
 
-- dodaje kolone `odometer_km` (kilometraža, za L/100km) i `invoice_number`,
+- dodaje kolonu `invoice_number` (i `odometer_km`, koja se više ne koristi - praćenje potrošnje L/100km je uklonjeno jer ne može da bude tačno),
 - dodaje UNIQUE indeks `(user_id, invoice_number)` - isti račun se ne može sačuvati dvaput,
 - uključuje **Row Level Security** sa politikama „samo svoji redovi“ (select/insert/update/delete).
 
@@ -102,7 +102,7 @@ Zaštita od zloupotrebe:
 
 - cilj je isključivo `suf.purs.gov.rs` (domain allowlist),
 - pozivi su dozvoljeni samo sa origin-a aplikacije (`ALLOWED_ORIGINS` u `src/index.js` - GitHub Pages + localhost); ako se aplikacija preseli na drugi domen, dodaj ga tu,
-- rate limit 30 zahteva / 60s po IP adresi + User-Agent-u (binding `SCAN_LIMITER` u `wrangler.jsonc`; User-Agent zato što mobilni operateri dele jednu IP adresu na mnogo korisnika) - preko toga Worker vraća 429.
+- rate limit 30 zahteva / 60s po IP adresi + User-Agent-u (binding `SCAN_LIMITER`; User-Agent zato što mobilni operateri dele jednu IP adresu na mnogo korisnika) i gornja granica 300 / 60s samo po IP adresi (`IP_LIMITER`, da se limit ne zaobiđe menjanjem User-Agent-a) - preko toga Worker vraća 429.
 
 ## Deploy na GitHub Pages
 

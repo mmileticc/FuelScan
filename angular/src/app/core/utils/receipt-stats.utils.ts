@@ -113,54 +113,8 @@ export function computeStatistics(
 }
 
 // ---------------------------------------------------------------------------
-// Potrošnja, mesečni troškovi, poređenja
+// Mesečni troškovi, poređenja
 // ---------------------------------------------------------------------------
-
-export interface ConsumptionPoint {
-  /** Zapis na kom je izmerena potrošnja (točenje koje "zatvara" deonicu). */
-  receipt: FuelReceiptRecord;
-  km: number;
-  litersPer100: number;
-}
-
-export interface ConsumptionResult {
-  /** Ponderisan prosek (ukupno litara / ukupno km * 100) ili `null` ako nema dovoljno podataka. */
-  average: number | null;
-  points: ConsumptionPoint[];
-  /** L/100km po `id` zapisa - za prikaz u istoriji. */
-  byId: Map<string, number>;
-}
-
-/**
- * Potrošnja metodom punog rezervoara: litri sipani na točenju N pokrivaju km
- * pređene od točenja N-1 do N. Uzimaju se samo uzastopni zapisi koji oba
- * imaju kilometražu; par sa razlikom <= 0 (greška u unosu) se preskače.
- */
-export function computeConsumption(receipts: FuelReceiptRecord[]): ConsumptionResult {
-  const withKm = receipts
-    .filter((r) => typeof r.odometer_km === 'number' && r.odometer_km > 0 && r.date)
-    .sort((a, b) => new Date(a.date as string).getTime() - new Date(b.date as string).getTime());
-
-  const points: ConsumptionPoint[] = [];
-  for (let i = 1; i < withKm.length; i++) {
-    const prev = withKm[i - 1];
-    const curr = withKm[i];
-    const km = (curr.odometer_km as number) - (prev.odometer_km as number);
-    const liters = Number(curr.liters) || 0;
-    // > 3000 km između dva točenja je skoro sigurno propušten račun - ne računaj.
-    if (km <= 0 || km > 3000 || liters <= 0) continue;
-    points.push({ receipt: curr, km, litersPer100: (liters / km) * 100 });
-  }
-
-  const totalKm = points.reduce((s, p) => s + p.km, 0);
-  const totalLiters = points.reduce((s, p) => s + (Number(p.receipt.liters) || 0), 0);
-
-  return {
-    average: totalKm > 0 ? (totalLiters / totalKm) * 100 : null,
-    points,
-    byId: new Map(points.map((p) => [p.receipt.id, p.litersPer100])),
-  };
-}
 
 export interface MonthlySpending {
   /** "2026-10" */

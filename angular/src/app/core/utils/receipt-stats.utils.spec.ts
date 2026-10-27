@@ -1,7 +1,6 @@
 import { FuelReceiptRecord } from '../models/receipt.model';
 import {
   avgPriceByCategory,
-  computeConsumption,
   computeStatistics,
   getMonthlyComparison,
   monthlySpending,
@@ -14,7 +13,6 @@ function receipt(partial: Partial<FuelReceiptRecord>): FuelReceiptRecord {
     id: String(nextId++),
     user_id: 'u1',
     invoice_number: null,
-    odometer_km: null,
     station: 'NIS',
     fuel_type: 'EVRO DIZEL',
     liters: 40,
@@ -59,30 +57,6 @@ describe('receipt-stats.utils', () => {
     expect(result.cheapest?.station).toBe('A');
     expect(result.expensive?.station).toBe('B');
     expect(result.chartData.length).toBe(2);
-  });
-
-  describe('computeConsumption', () => {
-    it('metoda punog rezervoara, ponderisan prosek', () => {
-      const result = computeConsumption([
-        receipt({ odometer_km: 10000, liters: 45, date: '2026-09-01T10:00:00+02:00' }),
-        receipt({ odometer_km: 10600, liters: 42, date: '2026-09-15T10:00:00+02:00' }),
-        receipt({ odometer_km: 11200, liters: 36, date: '2026-10-01T10:00:00+02:00' }),
-      ]);
-      expect(result.points.length).toBe(2);
-      expect(result.points[0].litersPer100).toBeCloseTo(7, 5);
-      expect(result.points[1].litersPer100).toBeCloseTo(6, 5);
-      expect(result.average).toBeCloseTo(6.5, 5);
-    });
-
-    it('preskače zapise bez km i nelogične razlike', () => {
-      const result = computeConsumption([
-        receipt({ odometer_km: 10000, date: '2026-09-01T10:00:00+02:00' }),
-        receipt({ odometer_km: null, date: '2026-09-10T10:00:00+02:00' }),
-        receipt({ odometer_km: 9000, date: '2026-09-15T10:00:00+02:00' }),
-      ]);
-      expect(result.points.length).toBe(0);
-      expect(result.average).toBeNull();
-    });
   });
 
   it('monthlySpending pravi 12 meseci, uključujući tekući', () => {

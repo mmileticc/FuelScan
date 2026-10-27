@@ -34,7 +34,7 @@ type SortMode = 'frequent' | 'cheapest' | 'recent';
 
       <div class="flex flex-wrap gap-2">
         @for (c of categoryOptions; track c.value) {
-          <button type="button" class="chip" [class.chip-active]="category() === c.value" (click)="category.set(c.value)">
+          <button type="button" class="chip" [class.chip-active]="category() === c.value" [attr.aria-pressed]="category() === c.value" (click)="category.set(c.value)">
             {{ c.label }}
           </button>
         }
@@ -47,6 +47,7 @@ type SortMode = 'frequent' | 'cheapest' | 'recent';
             (click)="sort.set(s.value)"
             class="flex-1 text-xs font-medium py-2 rounded-lg transition-all"
             [class.bg-fuel-600]="sort() === s.value"
+            [attr.aria-pressed]="sort() === s.value"
             [class.text-white]="sort() === s.value"
             [class.text-slate-400]="sort() !== s.value"
           >

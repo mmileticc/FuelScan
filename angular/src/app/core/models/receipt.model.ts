@@ -76,8 +76,6 @@ export interface ParsedReceipt {
   date: string | null;
   invoice_number: string | null;
   raw_url: string | null;
-  /** Unosi korisnik na kartici za pregled (opciono). */
-  odometer_km?: number | null;
 }
 
 /** Red za upis u Supabase tabelu `fuel_receipts`. */
@@ -85,8 +83,6 @@ export interface FuelReceiptRow {
   user_id: string;
   /** Broj fiskalnog računa - (user_id, invoice_number) je UNIQUE u bazi; `null` za ručni unos. */
   invoice_number: string | null;
-  /** Stanje kilometar-sata pri točenju (opciono) - koristi se za L/100km. */
-  odometer_km: number | null;
   station: string | null;
   fuel_type: string | null;
   liters: number | null;

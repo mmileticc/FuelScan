@@ -99,11 +99,21 @@ export class AuthService {
     }
   }
 
+  /**
+   * Odjava. Bez interneta server ne može da poništi sesiju, ali odjava na ovom
+   * uređaju mora uvek da uspe - tada se briše samo lokalna sesija
+   * (refresh token na serveru ionako ističe sam).
+   */
   async signOut(): Promise<void> {
     const { error } = await supabaseClient.auth.signOut();
     if (error) {
-      throw error;
+      const local = await supabaseClient.auth.signOut({ scope: 'local' });
+      if (local.error) {
+        throw local.error;
+      }
     }
+    this.offlineSession.set(false);
+    this.currentUser.set(null);
   }
 
   /** Ime za pozdravnu poruku na dashboard-u (isto ponašanje kao `handleSignedInUI`). */

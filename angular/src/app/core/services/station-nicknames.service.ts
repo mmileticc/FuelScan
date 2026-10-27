@@ -3,6 +3,7 @@ import { Observable, from, map, of, switchMap, throwError } from 'rxjs';
 
 import { FuelReceiptRecord } from '../models/receipt.model';
 import { supabaseClient } from '../supabase/supabase-client';
+import { friendlyError } from '../utils/errors.utils';
 import { ReceiptsStore } from './receipts-store.service';
 import { ToastService } from './toast.service';
 
@@ -24,11 +25,20 @@ export class StationNicknamesService {
   private readonly _nicknames = signal<ReadonlyMap<string, string>>(new Map());
   private loaded = false;
   private loading = false;
+  private wanted = false;
+
+  constructor() {
+    // Učitavanje nije uspelo bez interneta - pokušaj ponovo čim se veza vrati.
+    window.addEventListener('online', () => {
+      if (this.wanted && !this.loaded) this.load();
+    });
+  }
 
   /** ključ stanice -> nadimak */
   readonly nicknames = this._nicknames.asReadonly();
 
   load(force = false): void {
+    this.wanted = true;
     if ((this.loaded && !force) || this.loading) return;
     this.loading = true;
     from(supabaseClient.from('station_nicknames').select('station_key, nickname')).subscribe({
@@ -49,6 +59,7 @@ export class StationNicknamesService {
   reset(): void {
     this._nicknames.set(new Map());
     this.loaded = false;
+    this.wanted = false;
   }
 
   get(key: string | null | undefined): string | null {
@@ -114,7 +125,7 @@ export class StationNicknamesService {
         onDone?.();
       },
       error: (err: unknown) =>
-        this.toast.show(err instanceof Error ? `Greška pri čuvanju nadimka: ${err.message}` : 'Greška pri čuvanju nadimka.', 'error'),
+        this.toast.show(friendlyError(err, 'čuvanju nadimka'), 'error'),
     });
   }
 }

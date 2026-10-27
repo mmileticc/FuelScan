@@ -20,6 +20,7 @@ import { ReceiptsStore } from '../../core/services/receipts-store.service';
 import { StationNicknamesService } from '../../core/services/station-nicknames.service';
 import { ReceiptService } from '../../core/services/receipt.service';
 import { ToastService } from '../../core/services/toast.service';
+import { friendlyError } from '../../core/utils/errors.utils';
 import { isSufReceiptUrl } from '../../core/utils/receipt-parsing.utils';
 import { resolveStationKey } from '../../core/utils/stations.utils';
 import { ReceiptFormComponent, ReceiptFormValue } from '../../shared/receipt-form/receipt-form.component';
@@ -307,7 +308,6 @@ export class ScanComponent implements AfterViewInit, OnDestroy {
           price_per_l: r.price_per_l,
           total: r.fuel_type ? r.total : null,
           date: r.date,
-          odometer_km: null,
           // Ako je ova stanica već dobila nadimak, ponudi ga.
           nickname: this.nicknames.get(resolveStationKey(r, this.store.receipts())),
         }
@@ -506,7 +506,7 @@ export class ScanComponent implements AfterViewInit, OnDestroy {
         },
         error: (err: unknown) => {
           this.isSaving.set(false);
-          this.toast.show(err instanceof Error && err.message ? err.message : 'Greška pri čuvanju.', 'error', 4000);
+          this.toast.show(friendlyError(err, 'čuvanju računa'), 'error');
         },
       });
   }

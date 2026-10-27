@@ -10,7 +10,6 @@ function record(id: string, date: string): FuelReceiptRecord {
     id,
     user_id: 'u1',
     invoice_number: null,
-    odometer_km: null,
     station: 'NIS',
     fuel_type: 'EVRO DIZEL',
     liters: 40,
@@ -65,7 +64,7 @@ describe('ReceiptsStore', () => {
 
       const undo = store.scheduleDelete(store.receipts()[0], 5000);
       expect(store.receipts().length).toBe(0);
-      expect(JSON.parse(localStorage.getItem('fuelscan.pendingDeletes')!)).toEqual(['a']);
+      expect(JSON.parse(localStorage.getItem('fuelscan.pendingDeletes')!)).toEqual([{ id: 'a' }]);
 
       undo();
       tick(5000);
@@ -85,7 +84,8 @@ describe('ReceiptsStore', () => {
     }));
 
     it('brisanje zapamćeno iz prethodnog pokretanja se završava pri učitavanju', () => {
-      localStorage.setItem('fuelscan.pendingDeletes', JSON.stringify(['old']));
+      // Stari format (samo id) i zapis drugog korisnika - drugi se ne sme dirati.
+      localStorage.setItem('fuelscan.pendingDeletes', JSON.stringify(['old', { id: 'foreign', userId: 'someone-else' }]));
       const deleteSpy = jasmine.createSpy('deleteReceipt$').and.returnValue(of(true));
       TestBed.configureTestingModule({
         providers: [
@@ -99,6 +99,8 @@ describe('ReceiptsStore', () => {
       store.load();
       expect(store.receipts().length).toBe(0);
       expect(deleteSpy).toHaveBeenCalledWith('old');
+      expect(deleteSpy).not.toHaveBeenCalledWith('foreign');
+      expect(JSON.parse(localStorage.getItem('fuelscan.pendingDeletes')!)).toEqual([{ id: 'foreign', userId: 'someone-else' }]);
     });
   });
 });
