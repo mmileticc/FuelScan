@@ -2,6 +2,7 @@ import { Component, inject } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
 import { AuthService } from './core/services/auth.service';
+import { ReceiptsStore } from './core/services/receipts-store.service';
 import { ToastService } from './core/services/toast.service';
 
 /**
@@ -20,6 +21,7 @@ export class App {
   protected readonly auth = inject(AuthService);
   protected readonly toastService = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly store = inject(ReceiptsStore);
 
   async login(): Promise<void> {
     try {
@@ -32,6 +34,7 @@ export class App {
   async logout(): Promise<void> {
     try {
       await this.auth.signOut();
+      this.store.reset();
       this.toastService.show('Uspešno ste odjavljeni.', 'success');
       await this.router.navigate(['/welcome']);
     } catch (err) {

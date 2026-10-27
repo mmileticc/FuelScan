@@ -21,18 +21,6 @@ export const RECEIPT_META_SELECTORS = {
   municipality: 'administrativeUnitLabel',
 } as const;
 
-/** Ključne reči za prepoznavanje stavke goriva (identično fuel_keywords iz main.py). */
-export const FUEL_KEYWORDS: readonly string[] = [
-  'DIZEL',
-  'BMB',
-  'GAS',
-  'TNG',
-  'BENZIN',
-  'PREMIUM',
-  'DRIVE',
-  'OPTIPUR',
-];
-
 /** Token + broj računa izvučeni iz inline `<script>` bloka (viewModel.Token / viewModel.InvoiceNumber). */
 export interface ReceiptTokenData {
   invoiceNumber: string;
@@ -87,12 +75,18 @@ export interface ParsedReceipt {
   total: number | null;
   date: string | null;
   invoice_number: string | null;
-  raw_url: string;
+  raw_url: string | null;
+  /** Unosi korisnik na kartici za pregled (opciono). */
+  odometer_km?: number | null;
 }
 
-/** Red za upis u Supabase tabelu `fuel_receipts` (vidi old-vanilla/js/api.js). */
+/** Red za upis u Supabase tabelu `fuel_receipts`. */
 export interface FuelReceiptRow {
   user_id: string;
+  /** Broj fiskalnog računa - (user_id, invoice_number) je UNIQUE u bazi; `null` za ručni unos. */
+  invoice_number: string | null;
+  /** Stanje kilometar-sata pri točenju (opciono) - koristi se za L/100km. */
+  odometer_km: number | null;
   station: string | null;
   fuel_type: string | null;
   liters: number | null;
@@ -120,9 +114,10 @@ export interface FuelReceiptRecord extends FuelReceiptRow {
  *      pronađeni (obično prolazna stvar sa strane Poreske uprave).
  *   - `tax-authority-empty` - POST /specifications je prošao, ali server nije
  *      vratio stavke (najčešći slučaj - "hladan" prvi pristup tom računu).
+ *   - `rate-limited` - CORS proxy je vratio 429 (previše pokušaja u kratkom roku).
  *   - `network` - CORS proxy / mreža / bilo šta neočekivano.
  */
-export type ReceiptErrorKind = 'invalid-url' | 'parse-failed' | 'tax-authority-empty' | 'network';
+export type ReceiptErrorKind = 'invalid-url' | 'parse-failed' | 'tax-authority-empty' | 'rate-limited' | 'network';
 
 export class ReceiptScanError extends Error {
   constructor(

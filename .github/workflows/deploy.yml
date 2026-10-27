@@ -41,6 +41,11 @@ jobs:
         working-directory: angular
         run: npm ci
 
+      # Unit testovi (parsiranje računa, statistika) - deploy se ne radi ako padnu.
+      - name: Test
+        working-directory: angular
+        run: npx ng test --watch=false --browsers=ChromeHeadless
+
       # /FuelScan/ mora da odgovara imenu GitHub repozitorijuma
       # (https://<username>.github.io/<repo-name>/). Ako repo ikad promeni ime,
       # izmeniti --base-href ovde.

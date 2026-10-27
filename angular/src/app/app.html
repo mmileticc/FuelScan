@@ -73,7 +73,7 @@
 }
 
 @if (toastService.toast(); as toast) {
-  <div class="fixed top-16 left-1/2 -translate-x-1/2 z-50 max-w-xs w-full px-4">
+  <div class="fixed top-16 left-1/2 -translate-x-1/2 z-50 max-w-xs w-full px-4" role="status" aria-live="polite">
     <div
       class="text-sm px-4 py-3 rounded-xl shadow-xl text-center border"
       [class.bg-slate-800]="toast.type === 'info'"
@@ -89,7 +89,12 @@
       [class.border-red-600]="toast.type === 'error'"
       [class.text-red-100]="toast.type === 'error'"
     >
-      {{ toast.message }}
+      <span>{{ toast.message }}</span>
+      @if (toast.action) {
+        <button type="button" (click)="toastService.runAction()" class="ml-3 font-bold underline underline-offset-2">
+          {{ toast.action.label }}
+        </button>
+      }
     </div>
   </div>
 }

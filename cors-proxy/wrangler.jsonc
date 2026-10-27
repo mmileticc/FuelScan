@@ -2,5 +2,14 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "fuelscan-proxy",
   "main": "src/index.js",
-  "compatibility_date": "2026-07-01"
+  "compatibility_date": "2026-07-01",
+  // Rate limit po IP adresi (besplatan Workers Rate Limiting binding).
+  // `period` mora biti 10 ili 60 sekundi; `namespace_id` je proizvoljan broj jedinstven na nalogu.
+  "ratelimits": [
+    {
+      "name": "SCAN_LIMITER",
+      "namespace_id": "1001",
+      "simple": { "limit": 30, "period": 60 }
+    }
+  ]
 }

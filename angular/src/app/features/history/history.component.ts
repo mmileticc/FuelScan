@@ -1,140 +1,256 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { DatePipe, DecimalPipe } from '@angular/common';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
-import { FuelReceiptsService } from '../../core/services/fuel-receipts.service';
-import { ToastService } from '../../core/services/toast.service';
 import { FuelReceiptRecord } from '../../core/models/receipt.model';
+import { FuelReceiptsService } from '../../core/services/fuel-receipts.service';
+import { ReceiptsStore } from '../../core/services/receipts-store.service';
+import { ToastService } from '../../core/services/toast.service';
+import { FuelCategory, detectFuel } from '../../core/utils/receipt-parsing.utils';
+import { StatsPeriod, computeConsumption, filterByPeriod } from '../../core/utils/receipt-stats.utils';
+import { ReceiptFormComponent, ReceiptFormValue } from '../../shared/receipt-form/receipt-form.component';
+import { receiptsToCsv } from './receipts-csv';
+
+const PAGE_SIZE = 30;
+const UNDO_MS = 5000;
 
 /**
- * Rekonstrukcija `#screen-history` iz starog `index.html` + `ui/history.js`.
- *
- * Napomena: stari long-press/floating-menu za brisanje (pointerdown/pointermove
- * tajmeri) je ovde zamenjen jednostavnim dugmetom za brisanje + potvrdni modal
- * (isti `#delete-modal` koncept), što je pristupačnije i lakše za održavanje
- * uz identičan krajnji efekat.
+ * Istorija točenja: pretraga, filteri (gorivo, period), izmena zapisa, CSV
+ * izvoz i brisanje sa "Poništi" (zapis se zaista briše tek posle 5s).
  */
 @Component({
   selector: 'app-history',
   standalone: true,
+  imports: [DatePipe, DecimalPipe, ReceiptFormComponent],
   template: `
     <section class="px-4 pt-6 pb-28 space-y-4">
       <div class="flex items-center justify-between">
         <h2 class="text-xl font-bold">Istorija punjenja</h2>
+        <button
+          type="button"
+          (click)="exportCsv()"
+          [disabled]="!filtered().length"
+          class="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-1.5 rounded-lg disabled:opacity-40"
+        >
+          Izvezi CSV
+        </button>
       </div>
 
-      @if (loading()) {
+      <input
+        type="search"
+        class="field-input"
+        placeholder="Pretraga: stanica, grad, gorivo..."
+        [value]="query()"
+        (input)="query.set($any($event.target).value); visible.set(pageSize)"
+        aria-label="Pretraga"
+      />
+
+      <div class="flex flex-wrap gap-2">
+        @for (c of categoryOptions; track c.value) {
+          <button type="button" class="chip" [class.chip-active]="category() === c.value" (click)="category.set(c.value); visible.set(pageSize)">
+            {{ c.label }}
+          </button>
+        }
+        <span class="w-px bg-slate-700 mx-1"></span>
+        @for (p of periodOptions; track p.value) {
+          <button type="button" class="chip" [class.chip-active]="period() === p.value" (click)="period.set(p.value); visible.set(pageSize)">
+            {{ p.label }}
+          </button>
+        }
+      </div>
+
+      @if (store.loading() && !store.receipts().length) {
         <p class="text-slate-500 text-sm text-center py-10">Učitavanje...</p>
-      } @else if (!receipts().length) {
-        <p class="text-slate-500 text-sm text-center py-10">Istorija je prazna.</p>
+      } @else if (!filtered().length) {
+        <p class="text-slate-500 text-sm text-center py-10">
+          {{ store.receipts().length ? 'Nema zapisa za izabrane filtere.' : 'Istorija je prazna.' }}
+        </p>
       } @else {
+        <p class="text-[11px] text-slate-500">
+          {{ filtered().length }} zapisa · {{ filteredTotal() | number: '1.0-0' }} RSD · {{ filteredLiters() | number: '1.0-1' }} L
+        </p>
         <ul class="space-y-3">
-          @for (r of receipts(); track r.id) {
-            <li class="relative bg-surface-card border border-surface-border rounded-xl px-4 py-4 space-y-2">
-              <div class="flex items-start justify-between">
-                <div>
-                  <p class="font-semibold leading-tight">{{ r.station ?? 'Nepoznata stanica' }}</p>
-                  <p class="text-[11px] text-slate-400 mt-0.5">{{ locationText(r) }}</p>
+          @for (r of shown(); track r.id) {
+            <li class="bg-surface-card border border-surface-border rounded-xl px-4 py-4 space-y-2">
+              <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0">
+                  <p class="font-semibold leading-tight truncate">{{ r.station ?? 'Nepoznata stanica' }}</p>
+                  <p class="text-[11px] text-slate-400 mt-0.5 truncate">{{ locationText(r) }}</p>
                 </div>
-                <div class="flex items-center gap-2 shrink-0">
+                <div class="flex items-center gap-1 shrink-0">
                   <span class="text-xs text-fuel-300 bg-fuel-900 px-2 py-0.5 rounded-lg">{{ r.fuel_type ?? '—' }}</span>
-                  <button
-                    type="button"
-                    (click)="requestDelete(r.id)"
-                    class="text-slate-500 hover:text-red-400 transition-colors text-xs px-1"
-                    aria-label="Obriši"
-                  >
-                    ✕
-                  </button>
+                  <button type="button" (click)="editing.set(r)" class="icon-btn" aria-label="Izmeni">✎</button>
+                  <button type="button" (click)="deleteWithUndo(r)" class="icon-btn hover:text-red-400" aria-label="Obriši">✕</button>
                 </div>
               </div>
               <div class="flex items-center justify-between text-sm pt-1">
-                <span class="text-slate-400 text-xs">{{ formatDate(r.date) }}</span>
-                <span class="font-mono text-fuel-400 font-semibold">{{ r.total ? r.total.toFixed(0) + ' RSD' : '—' }}</span>
+                <span class="text-slate-400 text-xs">{{ r.date ? (r.date | date: 'd.M.y. HH:mm') : '—' }}</span>
+                <span class="font-mono text-fuel-400 font-semibold">{{ r.total ? (r.total | number: '1.0-0') + ' RSD' : '—' }}</span>
               </div>
-              <div class="grid grid-cols-2 gap-2 pt-1.5 border-t border-surface-border text-xs text-slate-400">
-                <span>Litara: <strong class="text-slate-200">{{ r.liters ? r.liters.toFixed(2) + ' L' : '—' }}</strong></span>
-                <span>Cena/L: <strong class="text-slate-200">{{ r.price_per_l ? r.price_per_l.toFixed(2) + ' RSD' : '—' }}</strong></span>
+              <div class="grid grid-cols-3 gap-2 pt-1.5 border-t border-surface-border text-xs text-slate-400">
+                <span>Litara: <strong class="text-slate-200">{{ r.liters ? (r.liters | number: '1.2-2') : '—' }}</strong></span>
+                <span>Cena/L: <strong class="text-slate-200">{{ r.price_per_l ? (r.price_per_l | number: '1.2-2') : '—' }}</strong></span>
+                <span>
+                  @if (consumption().get(r.id); as l100) {
+                    <strong class="text-slate-200">{{ l100 | number: '1.1-1' }}</strong> L/100km
+                  } @else if (r.odometer_km) {
+                    <strong class="text-slate-200">{{ r.odometer_km | number: '1.0-0' }}</strong> km
+                  }
+                </span>
               </div>
             </li>
           }
         </ul>
+        @if (shown().length < filtered().length) {
+          <button
+            type="button"
+            (click)="visible.set(visible() + pageSize)"
+            class="w-full text-sm py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700"
+          >
+            Prikaži još ({{ filtered().length - shown().length }})
+          </button>
+        }
       }
     </section>
 
-    @if (pendingDeleteId()) {
-      <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-        <div class="bg-surface-card border border-surface-border p-6 rounded-2xl w-full max-w-xs shadow-2xl">
-          <h3 class="text-lg font-bold text-white mb-2">Brisanje zapisa?</h3>
-          <p class="text-slate-400 text-sm mb-6">Ova akcija je nepovratna. Da li ste sigurni?</p>
-          <div class="flex gap-3">
-            <button type="button" (click)="cancelDelete()" class="flex-1 py-2 rounded-xl bg-slate-700 text-white font-medium hover:bg-slate-600">
-              Odustani
-            </button>
-            <button type="button" (click)="confirmDelete()" class="flex-1 py-2 rounded-xl bg-red-600 text-white font-medium hover:bg-red-500">
-              Obriši
-            </button>
-          </div>
+    @if (editing(); as r) {
+      <div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" (click)="editing.set(null)">
+        <div
+          class="bg-slate-900 border border-surface-border p-5 rounded-t-2xl sm:rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
+          (click)="$event.stopPropagation()"
+        >
+          <h3 class="text-lg font-bold mb-3">Izmena zapisa</h3>
+          <app-receipt-form
+            [initial]="r"
+            [busy]="saving()"
+            submitLabel="Sačuvaj izmene"
+            cancelLabel="Otkaži"
+            (submitted)="saveEdit(r, $event)"
+            (cancelled)="editing.set(null)"
+          />
         </div>
       </div>
     }
   `,
 })
-export class HistoryComponent implements OnInit {
-  private readonly receiptsService = inject(FuelReceiptsService);
+export class HistoryComponent implements OnInit, OnDestroy {
+  protected readonly store = inject(ReceiptsStore);
+  private readonly api = inject(FuelReceiptsService);
   private readonly toast = inject(ToastService);
+  private readonly destroyRef = inject(DestroyRef);
 
-  readonly receipts = signal<FuelReceiptRecord[]>([]);
-  readonly loading = signal(true);
-  readonly pendingDeleteId = signal<string | null>(null);
+  readonly pageSize = PAGE_SIZE;
+  readonly categoryOptions: { value: FuelCategory | 'all'; label: string }[] = [
+    { value: 'all', label: 'Sve' },
+    { value: 'Dizel', label: 'Dizel' },
+    { value: 'Benzin', label: 'Benzin' },
+    { value: 'TNG', label: 'TNG' },
+    { value: 'CNG', label: 'CNG' },
+  ];
+  readonly periodOptions: { value: StatsPeriod; label: string }[] = [
+    { value: 'all', label: 'Ceo period' },
+    { value: 'year', label: '12 meseci' },
+    { value: 'month', label: '30 dana' },
+  ];
+
+  readonly query = signal('');
+  readonly category = signal<FuelCategory | 'all'>('all');
+  readonly period = signal<StatsPeriod>('all');
+  readonly visible = signal(PAGE_SIZE);
+  readonly editing = signal<FuelReceiptRecord | null>(null);
+  readonly saving = signal(false);
+
+  /** Brisanja koja čekaju istek roka za "Poništi". */
+  private readonly pendingDeletes = new Map<string, { timer: ReturnType<typeof setTimeout>; record: FuelReceiptRecord }>();
+
+  readonly consumption = computed(() => computeConsumption(this.store.receipts()).byId);
+
+  readonly filtered = computed(() => {
+    const q = this.query().trim().toLowerCase();
+    const cat = this.category();
+    return filterByPeriod(this.store.receipts(), this.period()).filter((r) => {
+      if (cat !== 'all' && detectFuel(r.fuel_type).category !== cat) return false;
+      if (!q) return true;
+      return [r.station, r.city, r.address, r.fuel_type].some((v) => v?.toLowerCase().includes(q));
+    });
+  });
+
+  readonly shown = computed(() => this.filtered().slice(0, this.visible()));
+  readonly filteredTotal = computed(() => this.filtered().reduce((s, r) => s + (Number(r.total) || 0), 0));
+  readonly filteredLiters = computed(() => this.filtered().reduce((s, r) => s + (Number(r.liters) || 0), 0));
 
   ngOnInit(): void {
-    this.load();
+    this.store.load();
+  }
+
+  ngOnDestroy(): void {
+    // Napuštanje ekrana = korisnik nije poništio -> izvrši brisanja odmah.
+    for (const { timer, record } of this.pendingDeletes.values()) {
+      clearTimeout(timer);
+      this.commitDelete(record);
+    }
+    this.pendingDeletes.clear();
   }
 
   locationText(r: FuelReceiptRecord): string {
     return [r.address, r.city].filter((v): v is string => !!v).join(', ') || 'Nepoznata lokacija';
   }
 
-  formatDate(dateStr: string | null): string {
-    if (!dateStr) return '—';
-    const date = new Date(dateStr);
-    return isNaN(date.getTime()) ? '—' : date.toLocaleDateString('sr-RS');
-  }
+  deleteWithUndo(record: FuelReceiptRecord): void {
+    this.store.removeLocal(record.id);
+    const timer = setTimeout(() => {
+      this.pendingDeletes.delete(record.id);
+      this.commitDelete(record);
+    }, UNDO_MS);
+    this.pendingDeletes.set(record.id, { timer, record });
 
-  requestDelete(id: string): void {
-    this.pendingDeleteId.set(id);
-  }
-
-  cancelDelete(): void {
-    this.pendingDeleteId.set(null);
-  }
-
-  confirmDelete(): void {
-    const id = this.pendingDeleteId();
-    if (!id) return;
-
-    this.receiptsService.deleteReceipt$(id).subscribe({
-      next: () => {
-        this.receipts.update((list) => list.filter((r) => r.id !== id));
-        this.pendingDeleteId.set(null);
-        this.toast.show('Zapis obrisan.', 'success');
-      },
-      error: (err) => {
-        this.pendingDeleteId.set(null);
-        this.toast.show(err instanceof Error ? `Greška pri brisanju: ${err.message}` : 'Greška pri brisanju.', 'error');
+    this.toast.show('Zapis obrisan.', 'info', UNDO_MS, {
+      label: 'Poništi',
+      handler: () => {
+        const pending = this.pendingDeletes.get(record.id);
+        if (!pending) return;
+        clearTimeout(pending.timer);
+        this.pendingDeletes.delete(record.id);
+        this.store.upsertLocal(pending.record);
       },
     });
   }
 
-  private load(): void {
-    this.loading.set(true);
-    this.receiptsService.fetchUserReceipts$().subscribe({
-      next: (data) => {
-        this.receipts.set(data);
-        this.loading.set(false);
-      },
-      error: (err) => {
-        this.toast.show(err instanceof Error ? err.message : 'Greška pri učitavanju podataka.', 'error');
-        this.loading.set(false);
+  saveEdit(record: FuelReceiptRecord, value: ReceiptFormValue): void {
+    this.saving.set(true);
+    this.store
+      .update$(record.id, value)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.saving.set(false);
+          this.editing.set(null);
+          this.toast.show('Izmene su sačuvane.', 'success');
+        },
+        error: (err: unknown) => {
+          this.saving.set(false);
+          this.toast.show(err instanceof Error ? `Greška pri čuvanju: ${err.message}` : 'Greška pri čuvanju.', 'error');
+        },
+      });
+  }
+
+  exportCsv(): void {
+    const csv = receiptsToCsv(this.filtered(), this.consumption());
+    // BOM da Excel ispravno prikaže č/ć/š/ž.
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `fuelscan-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  private commitDelete(record: FuelReceiptRecord): void {
+    this.api.deleteReceipt$(record.id).subscribe({
+      error: (err: unknown) => {
+        this.store.upsertLocal(record);
+        this.toast.show(err instanceof Error ? `Greška pri brisanju: ${err.message}` : 'Greška pri brisanju.', 'error');
       },
     });
   }

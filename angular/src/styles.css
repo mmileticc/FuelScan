@@ -4,6 +4,10 @@
    (klase umesto ID-jeva vezanih za showScreen() DOM toggling).
    ============================================================ */
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 html {
   background: #090d16;
   height: 100%;
@@ -119,22 +123,52 @@ nav a[routerLink='/scan']:active {
   }
 }
 
-/* Čišćenje default stilova eksterne html5-qrcode biblioteke */
-.qr-reader-hidden {
-  display: none;
+/* Okvir-vodič preko žive kamere - isti udeo kadra (70%) se dekodira. */
+.scan-guide {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 70%;
+  aspect-ratio: 1;
+  max-height: 70%;
+  transform: translate(-50%, -50%);
+  border-radius: 18px;
+  box-shadow: 0 0 0 9999px rgba(2, 6, 23, 0.45);
+  outline: 2px solid rgba(56, 189, 248, 0.85);
+  z-index: 5;
 }
-#qr-reader {
-  border: none !important;
-  background: #000 !important;
-}
-#qr-reader video {
-  object-fit: cover !important;
-}
-#qr-reader__dashboard_section,
-#qr-reader__header_message,
-#qr-reader__status_span,
-#qr-reader__filescan_input {
-  display: none !important;
+
+@layer components {
+  .cam-btn {
+    @apply bg-black/40 backdrop-blur-md w-11 h-11 rounded-full border border-white/20 hover:bg-black/60 transition flex items-center justify-center;
+  }
+  .scan-action {
+    @apply flex flex-col items-center gap-1 cursor-pointer p-2 rounded-xl hover:bg-slate-800 transition text-[11px] text-slate-300;
+  }
+  .field-label {
+    @apply block text-[10px] uppercase tracking-wider text-slate-400 mb-1;
+  }
+  .field-input {
+    @apply w-full bg-slate-900/70 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:border-fuel-400 focus:outline-none select-text;
+  }
+  .field-input.ng-invalid.ng-touched {
+    @apply border-red-500/70;
+  }
+  .chip {
+    @apply text-xs px-3 py-1 rounded-full border border-slate-700 text-slate-400 hover:text-slate-200;
+  }
+  .chip-active {
+    @apply bg-fuel-600 border-fuel-600 text-white;
+  }
+  .icon-btn {
+    @apply text-slate-500 hover:text-slate-200 transition-colors text-sm w-7 h-7 flex items-center justify-center rounded-md;
+  }
+  .stat-tile {
+    @apply bg-gradient-to-br from-slate-800 to-slate-900 border border-surface-border rounded-xl p-4;
+  }
+  .stat-label {
+    @apply text-[10px] text-slate-400 uppercase tracking-wider font-medium mb-1;
+  }
 }
 
 ::-webkit-scrollbar {

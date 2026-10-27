@@ -23,8 +23,11 @@
  * "ne prepoznaje" sesiju), što se u Angular-u vidi kao
  * "Poreska uprava nije vratila stavke računa."
  *
- * Ograničeno je isključivo na suf.purs.gov.rs (domain allowlist) da ovo ne bi
- * moglo da se zloupotrebi kao open proxy za bilo koji sajt.
+ * Zaštita od zloupotrebe:
+ *   - cilj je isključivo suf.purs.gov.rs (ALLOWED_HOSTS),
+ *   - pozivalac mora biti FuelScan aplikacija (ALLOWED_ORIGINS) - drugi
+ *     sajtovi ne mogu da koriste ovaj Worker iz browsera korisnika,
+ *   - rate limit po IP adresi (binding SCAN_LIMITER u wrangler.jsonc).
  *
  * DEPLOY / REDEPLOY (besplatno, preko Wrangler CLI):
  *   1. cd cors-proxy
@@ -39,6 +42,20 @@
  */
 
 const ALLOWED_HOSTS = ['suf.purs.gov.rs'];
+
+// Origin-i sa kojih aplikacija radi (GitHub Pages + lokalni `ng serve`).
+const ALLOWED_ORIGINS = ['https://mmileticc.github.io', 'http://localhost:4200', 'http://127.0.0.1:4200'];
+
+function isAllowedOrigin(origin) {
+  return !!origin && ALLOWED_ORIGINS.includes(origin);
+}
+
+function jsonError(status, message, origin) {
+  return new Response(JSON.stringify({ success: false, message }), {
+    status,
+    headers: { ...corsHeaders(origin), 'Content-Type': 'application/json; charset=utf-8' },
+  });
+}
 
 // Rezervni headeri - koriste se SAMO ako ih korisnikov pravi browser iz nekog
 // razloga nije poslao uopšte (retko, ali moguće kod nekih embedded/webview
@@ -82,8 +99,12 @@ function buildUpstreamHeaders(request) {
  * (npr. 'X-Requested-With') sa "not allowed by Access-Control-Allow-Headers".
  */
 function corsHeaders(origin, requestedHeaders) {
+  if (!isAllowedOrigin(origin)) {
+    // Bez CORS zaglavlja browser drugom sajtu ne dozvoljava da pročita odgovor.
+    return { Vary: 'Origin' };
+  }
   return {
-    'Access-Control-Allow-Origin': origin || '*',
+    'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': requestedHeaders || 'Content-Type, X-Requested-With',
     'Access-Control-Allow-Credentials': 'true',
@@ -98,14 +119,31 @@ function rewriteSetCookieForCrossSite(rawCookie) {
 }
 
 export default {
-  async fetch(request) {
-    const origin = request.headers.get('Origin') || '*';
+  async fetch(request, env) {
+    const origin = request.headers.get('Origin');
     // Preflight šalje TAČNO koje headere sledeći pravi zahtev planira da pošalje -
     // reflektujemo ih nazad umesto da hardkodiramo listu koja može da zastari.
     const requestedHeaders = request.headers.get('Access-Control-Request-Headers') || undefined;
 
+    if (!isAllowedOrigin(origin)) {
+      return new Response('Origin not allowed', { status: 403, headers: { Vary: 'Origin' } });
+    }
+
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: corsHeaders(origin, requestedHeaders) });
+    }
+
+    if (request.method !== 'GET' && request.method !== 'POST') {
+      return new Response('Method not allowed', { status: 405, headers: corsHeaders(origin) });
+    }
+
+    // Jedno skeniranje = GET + POST (+ do 2 ponovna pokušaja aplikacije) - limit je izdašan za normalnu upotrebu.
+    if (env?.SCAN_LIMITER) {
+      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+      const { success } = await env.SCAN_LIMITER.limit({ key: ip });
+      if (!success) {
+        return jsonError(429, 'Previše zahteva. Sačekajte minut pa pokušajte ponovo.', origin);
+      }
     }
 
     const requestUrl = new URL(request.url);
@@ -165,13 +203,7 @@ export default {
       // Ako suf.purs.gov.rs ne odgovori (spor server, mreža, itd.) vratimo
       // JASNU grešku SA CORS zaglavljima, umesto da Cloudflare vrati goli 504
       // bez CORS headera (što bi browser prijavio kao još konfuzniju grešku).
-      return new Response(
-        JSON.stringify({ success: false, message: 'Poreska uprava trenutno ne odgovara. Pokušajte ponovo.' }),
-        {
-          status: 502,
-          headers: { ...corsHeaders(origin), 'Content-Type': 'application/json; charset=utf-8' },
-        },
-      );
+      return jsonError(502, 'Poreska uprava trenutno ne odgovara. Pokušajte ponovo.', origin);
     }
 
     const body = await upstreamResponse.text();

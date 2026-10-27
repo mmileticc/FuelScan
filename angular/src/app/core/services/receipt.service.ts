@@ -1,11 +1,10 @@
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, from, throwError, timer } from 'rxjs';
 import { catchError, delay, map, retry, switchMap } from 'rxjs/operators';
 
 import { CORS_PROXY_URL, SUF_ALLOWED_HOST, TAX_AUTHORITY_SPECIFICATIONS_URL } from '../config/app-config';
 import {
-  FUEL_KEYWORDS,
   FuelReceiptRow,
   ParsedReceipt,
   RECEIPT_META_SELECTORS,
@@ -15,7 +14,17 @@ import {
   SpecificationsApiResponse,
 } from '../models/receipt.model';
 import { supabaseClient } from '../supabase/supabase-client';
-import { cleanStationName, normalizeText, parseLocalReceiptDate, parseNumber, roundTo2 } from '../utils/receipt-parsing.utils';
+import {
+  cleanStationName,
+  detectFuel,
+  isSufReceiptUrl,
+  normalizeText,
+  parseLocalReceiptDate,
+  parseNumber,
+  roundTo2,
+} from '../utils/receipt-parsing.utils';
+import { DUPLICATE_RECEIPT_MESSAGE, FuelReceiptsService } from './fuel-receipts.service';
+import { ReceiptsStore } from './receipts-store.service';
 
 /**
  * Novi tok parsiranja fiskalnog računa (zamena za `old-backend` Playwright parser).
@@ -49,6 +58,8 @@ import { cleanStationName, normalizeText, parseLocalReceiptDate, parseNumber, ro
 @Injectable({ providedIn: 'root' })
 export class ReceiptService {
   private readonly http = inject(HttpClient);
+  private readonly api = inject(FuelReceiptsService);
+  private readonly store = inject(ReceiptsStore);
 
   /**
    * Glavna ulazna tačka - poziva se sa URL-om dekodovanim iz QR koda.
@@ -59,7 +70,7 @@ export class ReceiptService {
    * korisnik gleda u generičan spinner i ne zna da li je nešto zapelo.
    */
   scanReceipt$(receiptUrl: string, onRetryAttempt?: (attempt: number, maxAttempts: number) => void): Observable<ParsedReceipt> {
-    if (!receiptUrl || !receiptUrl.includes(SUF_ALLOWED_HOST)) {
+    if (!isSufReceiptUrl(receiptUrl, SUF_ALLOWED_HOST)) {
       return throwError(() => new ReceiptScanError(`Nevažeći URL računa: ${receiptUrl}`, 'invalid-url'));
     }
 
@@ -95,9 +106,15 @@ export class ReceiptService {
       // "Poreska uprava nije vratila stavke računa.".
       retry({
         count: maxRetries,
-        delay: (_error, retryCount) => {
+        delay: (error, retryCount) => {
+          // Pogrešan/zabranjen zahtev (400/403 sa proxy-ja) se ne popravlja ponavljanjem.
+          if (!isRetryable(error)) {
+            return throwError(() => error);
+          }
           onRetryAttempt?.(retryCount, maxRetries);
-          return timer(1500 * retryCount);
+          // Kod 429 (rate limit na proxy-ju) treba sačekati duže.
+          const base = error instanceof HttpErrorResponse && error.status === 429 ? 5000 : 1500;
+          return timer(base * retryCount);
         },
       }),
       // Sve što stigne dovde, a NIJE već kategorisan ReceiptScanError (npr. pravi
@@ -107,6 +124,14 @@ export class ReceiptService {
         if (err instanceof ReceiptScanError) {
           return throwError(() => err);
         }
+        if (err instanceof HttpErrorResponse) {
+          if (err.status === 400 || err.status === 403) {
+            return throwError(() => new ReceiptScanError(`Proxy je odbio zahtev (${err.status}).`, 'invalid-url'));
+          }
+          if (err.status === 429) {
+            return throwError(() => new ReceiptScanError('Previše pokušaja u kratkom roku.', 'rate-limited'));
+          }
+        }
         const message = err instanceof Error ? err.message : String(err);
         return throwError(() => new ReceiptScanError(message, 'network'));
       }),
@@ -114,12 +139,18 @@ export class ReceiptService {
   }
 
   /**
-   * Poziva se tek kad korisnik eksplicitno klikne "Sačuvaj" na kartici
-   * rezultata (isti trenutak kao stari `btn-save-result` handler u
-   * `main.js`, koji je zvao `saveReceiptToSupabase(window.__pendingReceipt)`).
+   * Upis na zahtev korisnika (dugme "Sačuvaj"). Pre upisa se proverava da li
+   * je isti račun već sačuvan (po broju računa ili URL-u sa QR koda).
    */
   saveReceipt$(receipt: ParsedReceipt): Observable<true> {
-    return this.saveReceiptToSupabase$(receipt);
+    return this.api.isDuplicate$(receipt.invoice_number, receipt.raw_url).pipe(
+      switchMap((duplicate) => {
+        if (duplicate) {
+          return throwError(() => new Error(DUPLICATE_RECEIPT_MESSAGE));
+        }
+        return this.saveReceiptToSupabase$(receipt);
+      }),
+    );
   }
 
   /**
@@ -226,18 +257,13 @@ export class ReceiptService {
     let fuelItemCount = 0;
     let singleUnitPrice: number | null = null;
 
-    // NAPOMENA: pre je ovde bio `break` posle prve pronađene stavke goriva i
-    // `total` se uzimao iz `metadata.total` (ukupan iznos CELOG računa).
-    // Problem: ako račun ima gorivo + ostale stavke (grickalice, kafa...),
-    // `total` je uključivao i te stavke, dok su `liters`/`price_per_l` bili
-    // vezani samo za gorivo - total nije odgovarao liters * price_per_l.
-    // Sada se sabiraju SVE stavke koje matchuju FUEL_KEYWORDS (uobičajeno
-    // jedna, ali ne lomi se ako ih ima više), a total računa isključivo iz njih.
+    // Sabiraju se SVE stavke goriva (uobičajeno jedna, ali ne lomi se ako ih
+    // ima više), a total se računa isključivo iz njih - ne iz ukupnog iznosa
+    // računa, koji uključuje i kafu, grickalice itd.
     for (const item of specs.items) {
-      const nameUpper = item.name.toUpperCase();
-      if (FUEL_KEYWORDS.some((keyword) => nameUpper.includes(keyword))) {
+      if (detectFuel(item.name).isFuel) {
         if (fuelItemCount === 0) {
-          fuelType = item.name.trim();
+          fuelType = normalizeText(item.name.trim());
           singleUnitPrice = item.unitPrice;
         }
         fuelLiters += item.quantity;
@@ -280,10 +306,7 @@ export class ReceiptService {
     };
   }
 
-  /**
-   * 5. Upis u Supabase `fuel_receipts` tabelu NA ZAHTEV korisnika (dugme
-   *    "Sačuvaj"), isti red kao `saveReceiptToSupabase` iz `old-vanilla/js/api.js`.
-   */
+  /** 5. Upis u Supabase `fuel_receipts` tabelu (preko zajedničkog store-a, da se ekrani odmah osveže). */
   private saveReceiptToSupabase$(receipt: ParsedReceipt): Observable<true> {
     return from(supabaseClient.auth.getUser()).pipe(
       switchMap(({ data, error: authError }) => {
@@ -293,6 +316,8 @@ export class ReceiptService {
 
         const row: FuelReceiptRow = {
           user_id: data.user.id,
+          invoice_number: receipt.invoice_number,
+          odometer_km: receipt.odometer_km ?? null,
           station: receipt.station,
           fuel_type: receipt.fuel_type,
           liters: receipt.liters,
@@ -305,14 +330,20 @@ export class ReceiptService {
           municipality: receipt.municipality,
         };
 
-        return from(supabaseClient.from('fuel_receipts').insert([row]));
+        return this.store.insert$(row);
       }),
-      map(({ error: insertError }) => {
-        if (insertError) {
-          throw insertError;
-        }
-        return true as const;
-      }),
+      map(() => true as const),
     );
   }
+}
+
+/** Da li ima smisla ponoviti ceo ciklus GET+POST posle ove greške. */
+function isRetryable(error: unknown): boolean {
+  if (error instanceof ReceiptScanError) {
+    return error.kind !== 'invalid-url';
+  }
+  if (error instanceof HttpErrorResponse) {
+    return error.status !== 400 && error.status !== 403;
+  }
+  return true;
 }

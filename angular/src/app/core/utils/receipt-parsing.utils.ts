@@ -126,9 +126,31 @@ export function roundTo2(val: number | null | undefined): number | null {
 }
 
 /**
+ * Vraća UTC offset za Europe/Belgrade (npr. "+02:00" leti, "+01:00" zimi) za
+ * dati lokalni datum/vreme. Bez ovoga bi "2026-06-18T11:14:31" bez zone
+ * Postgres (timestamptz) protumačio kao UTC i pomerio vreme za 1-2h - što na
+ * prelazu meseca ume da prebaci točenje u pogrešan mesec.
+ */
+export function belgradeOffset(year: number, month: number, day: number, hour = 12): string {
+  try {
+    // Uzimamo trenutak "otprilike" tog lokalnog vremena (kao UTC) - razlika od
+    // par sati ne menja offset osim tačno u noći promene vremena, što je prihvatljivo.
+    const probe = new Date(Date.UTC(year, month - 1, day, hour));
+    const part = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Belgrade', timeZoneName: 'longOffset' })
+      .formatToParts(probe)
+      .find((p) => p.type === 'timeZoneName')?.value;
+    // "GMT+02:00" -> "+02:00"; "GMT" (offset 0) -> "+00:00"
+    const match = part?.match(/GMT([+-]\d{2}:\d{2})/);
+    return match ? match[1] : '+00:00';
+  } catch {
+    return '+01:00';
+  }
+}
+
+/**
  * Ekvivalent `parseLocalReceiptDate` iz old-vanilla/js/dateUtil.js.
- * Pretvara "18.6.2026. 11:14:31" (SDC datum sa računa) u ISO-nalik string
- * "2026-06-18T11:14:31" pogodan za Date/Supabase.
+ * Pretvara "18.6.2026. 11:14:31" (SDC datum sa računa, lokalno vreme u Srbiji)
+ * u ISO string SA zonom, npr. "2026-06-18T11:14:31+02:00".
  */
 export function parseLocalReceiptDate(dateStr: string | null | undefined): string | null {
   if (!dateStr || typeof dateStr !== 'string') {
@@ -152,9 +174,74 @@ export function parseLocalReceiptDate(dateStr: string | null | undefined): strin
     const day = dateComponents[0].padStart(2, '0');
     const month = dateComponents[1].padStart(2, '0');
     const year = dateComponents[2];
+    const [hh = '00', mm = '00', ss = '00'] = timePart.split(':');
+    const time = `${hh.padStart(2, '0')}:${mm.padStart(2, '0')}:${ss.padStart(2, '0')}`;
+    const offset = belgradeOffset(Number(year), Number(month), Number(day), Number(hh));
 
-    return `${year}-${month}-${day}T${timePart}`;
+    return `${year}-${month}-${day}T${time}${offset}`;
   } catch {
     return dateStr;
   }
+}
+
+/**
+ * Proverava da URL sa QR koda zaista vodi na portal Poreske uprave
+ * (tačan hostname, https) - `includes()` bi propustio i
+ * "https://evil.com/?suf.purs.gov.rs".
+ */
+export function isSufReceiptUrl(url: string | null | undefined, allowedHost = 'suf.purs.gov.rs'): boolean {
+  if (!url) {
+    return false;
+  }
+  try {
+    const parsed = new URL(url.trim());
+    return parsed.protocol === 'https:' && parsed.hostname === allowedHost;
+  } catch {
+    return false;
+  }
+}
+
+export type FuelCategory = 'Dizel' | 'Benzin' | 'TNG' | 'CNG';
+
+export interface FuelDetection {
+  isFuel: boolean;
+  category: FuelCategory | null;
+}
+
+/**
+ * Pravila za prepoznavanje goriva po nazivu stavke. Redosled je bitan (prvo
+ * specifičniji). Sve sa granicama reči, da npr. "PREMIUM KAFA" ili "VEGAS"
+ * ne bi bili protumačeni kao gorivo.
+ */
+const BRANDED = String.raw`(?:EVO|EKTO|G-?DRIVE|V-?POWER|MAXXMOTION|FUELSAVE)`;
+const FUEL_RULES: ReadonlyArray<[RegExp, FuelCategory]> = [
+  [/\b(TNG|LPG|AUTO\s?-?GAS|AUTOPLIN)\b/, 'TNG'],
+  [/\b(CNG|KPG|METAN)\b/, 'CNG'],
+  [new RegExp(String.raw`(DIZEL|DIESEL)\b|\bD2\b|\b${BRANDED}\s*D\b`), 'Dizel'],
+  [
+    new RegExp(
+      String.raw`\bBMB|BENZIN\b|\b(EUROSUPER|EVROSUPER|OPTIPUR)\b|\bSUPER\s*9[58]\b|\b${BRANDED}\s*(95|98|100)\b|\b(V-?POWER|MAXXMOTION|G-?DRIVE|FUELSAVE)\b`,
+    ),
+    'Benzin',
+  ],
+];
+
+/** Stavke koje sadrže reči goriva, ali NISU gorivo za vozilo (AdBlue, ulja, aditivi, boce za plin). */
+const NON_FUEL_PATTERN = /\b(AD-?BLUE|ADITIV|ADDITIVE|ULJE|OIL|TECNOST|PRANJE|BOCA|BOCE)\b/;
+
+/**
+ * Prepoznaje da li je stavka sa računa gorivo i koje kategorije. Naziv se
+ * prvo transliteruje (ćirilica -> latinica), pa se upoređuje velikim slovima.
+ */
+export function detectFuel(name: string | null | undefined): FuelDetection {
+  const normalized = (normalizeText(name) ?? '').toUpperCase();
+  if (!normalized || NON_FUEL_PATTERN.test(normalized)) {
+    return { isFuel: false, category: null };
+  }
+  for (const [pattern, category] of FUEL_RULES) {
+    if (pattern.test(normalized)) {
+      return { isFuel: true, category };
+    }
+  }
+  return { isFuel: false, category: null };
 }

@@ -1,17 +1,17 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject } from '@angular/core';
+import { DatePipe, DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 
 import { AuthService } from '../../core/services/auth.service';
-import { FuelReceiptsService } from '../../core/services/fuel-receipts.service';
-import { ToastService } from '../../core/services/toast.service';
+import { ReceiptsStore } from '../../core/services/receipts-store.service';
 import { FuelReceiptRecord } from '../../core/models/receipt.model';
-import { getMonthlyComparison } from '../../core/utils/receipt-stats.utils';
+import { computeConsumption, getMonthlyComparison } from '../../core/utils/receipt-stats.utils';
 
-/** Rekonstrukcija `#screen-dashboard` + `loadDashboardData()` iz starog `main.js`/`dashboard.js`. */
+/** Početni ekran: poslednje točenje, ovaj vs. prošli kalendarski mesec, potrošnja, poslednje transakcije. */
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, DatePipe, DecimalPipe],
   template: `
     <section class="px-4 pt-6 pb-28 space-y-6">
       <div class="bg-gradient-to-br from-fuel-700 to-fuel-900 rounded-2xl p-5 shadow-lg">
@@ -23,14 +23,16 @@ import { getMonthlyComparison } from '../../core/utils/receipt-stats.utils';
         <div class="col-span-2 flex justify-between items-center bg-slate-800/50 rounded-xl px-4 py-2 border border-slate-700">
           <p class="text-[10px] text-slate-400 uppercase">
             Poslednje evidentirano točenje:
-            <span class="text-white">{{ lastReceiptDateText() }}</span>
+            <span class="text-white">{{ lastReceipt()?.date ? (lastReceipt()!.date | date: 'd.M.y.') : '---' }}</span>
           </p>
-          <p class="text-sm font-bold font-mono text-fuel-400">{{ lastReceiptTotalText() }}</p>
+          <p class="text-sm font-bold font-mono text-fuel-400">
+            {{ lastReceipt()?.total ? (lastReceipt()!.total | number: '1.0-0') + ' RSD' : '---' }}
+          </p>
         </div>
 
         <div class="bg-surface-card border border-surface-border rounded-xl p-4 flex flex-col">
           <p class="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Potrošeno (Ovaj mesec)</p>
-          <p class="text-xl font-bold font-mono">{{ monthlyComparison().totals.thisSpent.toFixed(0) }} RSD</p>
+          <p class="text-xl font-bold font-mono">{{ monthlyComparison().totals.thisSpent | number: '1.0-0' }} RSD</p>
           <p
             class="text-[10px] font-mono mt-1"
             [class.text-red-500]="monthlyComparison().spent.isIncrease"
@@ -42,7 +44,7 @@ import { getMonthlyComparison } from '../../core/utils/receipt-stats.utils';
 
         <div class="bg-surface-card border border-surface-border rounded-xl p-4 flex flex-col">
           <p class="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Sipano (Ovaj mesec)</p>
-          <p class="text-xl font-bold font-mono">{{ monthlyComparison().totals.thisLiters.toFixed(1) }} L</p>
+          <p class="text-xl font-bold font-mono">{{ monthlyComparison().totals.thisLiters | number: '1.0-1' }} L</p>
           <p
             class="text-[10px] font-mono mt-1"
             [class.text-red-500]="monthlyComparison().liters.isIncrease"
@@ -51,6 +53,13 @@ import { getMonthlyComparison } from '../../core/utils/receipt-stats.utils';
             {{ monthlyComparison().liters.text }}
           </p>
         </div>
+
+        @if (averageConsumption() !== null) {
+          <div class="col-span-2 bg-surface-card border border-surface-border rounded-xl p-4 flex items-center justify-between">
+            <p class="text-[10px] text-slate-400 uppercase tracking-wider">Prosečna potrošnja</p>
+            <p class="text-xl font-bold font-mono">{{ averageConsumption() | number: '1.1-1' }} <span class="text-sm text-slate-400">L/100km</span></p>
+          </div>
+        }
       </div>
 
       <div>
@@ -59,7 +68,7 @@ import { getMonthlyComparison } from '../../core/utils/receipt-stats.utils';
           <a routerLink="/history" class="text-xs text-fuel-400 hover:text-fuel-300">Sve →</a>
         </div>
 
-        @if (loading()) {
+        @if (store.loading() && !store.receipts().length) {
           <p class="text-slate-500 text-sm text-center py-6">Učitavanje...</p>
         } @else if (!recentTransactions().length) {
           <p class="text-slate-500 text-sm text-center py-6">Nema podataka. Skenirajte prvi račun.</p>
@@ -69,11 +78,11 @@ import { getMonthlyComparison } from '../../core/utils/receipt-stats.utils';
               <li class="bg-surface-card border border-surface-border rounded-xl px-4 py-3 flex items-center justify-between">
                 <div>
                   <p class="font-medium text-sm">{{ r.station ?? 'Nepoznata stanica' }}</p>
-                  <p class="text-xs text-slate-400">{{ formatDate(r.date) }} · {{ r.fuel_type ?? '' }}</p>
+                  <p class="text-xs text-slate-400">{{ r.date ? (r.date | date: 'd.M.y.') : '—' }} · {{ r.fuel_type ?? '' }}</p>
                 </div>
                 <div class="text-right">
-                  <p class="font-semibold font-mono text-fuel-400">{{ r.total ? r.total.toFixed(0) + ' RSD' : '—' }}</p>
-                  <p class="text-xs text-slate-400">{{ r.liters ? r.liters.toFixed(1) + ' L' : '' }}</p>
+                  <p class="font-semibold font-mono text-fuel-400">{{ r.total ? (r.total | number: '1.0-0') + ' RSD' : '—' }}</p>
+                  <p class="text-xs text-slate-400">{{ r.liters ? (r.liters | number: '1.0-1') + ' L' : '' }}</p>
                 </div>
               </li>
             }
@@ -92,46 +101,14 @@ import { getMonthlyComparison } from '../../core/utils/receipt-stats.utils';
 })
 export class DashboardComponent implements OnInit {
   protected readonly auth = inject(AuthService);
-  private readonly receiptsService = inject(FuelReceiptsService);
-  private readonly toast = inject(ToastService);
+  protected readonly store = inject(ReceiptsStore);
 
-  readonly receipts = signal<FuelReceiptRecord[]>([]);
-  readonly loading = signal(true);
-
-  readonly lastReceipt = computed<FuelReceiptRecord | null>(() => this.receipts()[0] ?? null);
-  readonly monthlyComparison = computed(() => getMonthlyComparison(this.receipts()));
-  readonly recentTransactions = computed(() => this.receipts().slice(0, 3));
+  readonly lastReceipt = computed<FuelReceiptRecord | null>(() => this.store.receipts()[0] ?? null);
+  readonly monthlyComparison = computed(() => getMonthlyComparison(this.store.receipts()));
+  readonly recentTransactions = computed(() => this.store.receipts().slice(0, 3));
+  readonly averageConsumption = computed(() => computeConsumption(this.store.receipts()).average);
 
   ngOnInit(): void {
-    this.load();
-  }
-
-  lastReceiptDateText(): string {
-    return this.formatDate(this.lastReceipt()?.date ?? null, '---');
-  }
-
-  lastReceiptTotalText(): string {
-    const total = this.lastReceipt()?.total;
-    return total ? `${Number(total).toFixed(0)} RSD` : '---';
-  }
-
-  formatDate(dateStr: string | null | undefined, fallback = '—'): string {
-    if (!dateStr) return fallback;
-    const date = new Date(dateStr);
-    return isNaN(date.getTime()) ? fallback : date.toLocaleDateString('sr-RS');
-  }
-
-  private load(): void {
-    this.loading.set(true);
-    this.receiptsService.fetchUserReceipts$().subscribe({
-      next: (data) => {
-        this.receipts.set(data);
-        this.loading.set(false);
-      },
-      error: (err) => {
-        this.toast.show(err instanceof Error ? err.message : 'Greška pri učitavanju podataka.', 'error');
-        this.loading.set(false);
-      },
-    });
+    this.store.load();
   }
 }

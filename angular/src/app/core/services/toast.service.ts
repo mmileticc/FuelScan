@@ -2,16 +2,21 @@ import { Injectable, signal } from '@angular/core';
 
 export type ToastType = 'info' | 'success' | 'warning' | 'error';
 
+export interface ToastAction {
+  label: string;
+  handler: () => void;
+}
+
 export interface ToastMessage {
   id: number;
   message: string;
   type: ToastType;
+  action?: ToastAction;
 }
 
 /**
- * Prenos `showToast` iz `old-vanilla/js/ui/common.js` u Angular servis.
- * Umesto direktne DOM manipulacije, drži se `signal` koji AppComponent
- * prikazuje preko toast trake u shell-u.
+ * Jedna toast poruka u shell-u (`app.html`). Opciono nosi dugme akcije
+ * (npr. "Poništi" posle brisanja).
  */
 @Injectable({ providedIn: 'root' })
 export class ToastService {
@@ -20,16 +25,29 @@ export class ToastService {
   private counter = 0;
   private timer?: ReturnType<typeof setTimeout>;
 
-  show(message: string, type: ToastType = 'info', duration = 3000): void {
+  show(message: string, type: ToastType = 'info', duration = 3000, action?: ToastAction): void {
     clearTimeout(this.timer);
 
     const id = ++this.counter;
-    this.toast.set({ id, message, type });
+    this.toast.set({ id, message, type, action });
 
     this.timer = setTimeout(() => {
       if (this.toast()?.id === id) {
         this.toast.set(null);
       }
     }, duration);
+  }
+
+  /** Klik na dugme akcije - izvrši je i skloni toast. */
+  runAction(): void {
+    const current = this.toast();
+    clearTimeout(this.timer);
+    this.toast.set(null);
+    current?.action?.handler();
+  }
+
+  dismiss(): void {
+    clearTimeout(this.timer);
+    this.toast.set(null);
   }
 }
